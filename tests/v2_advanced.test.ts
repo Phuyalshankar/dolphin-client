@@ -410,4 +410,53 @@ describe('v2.0 Advanced Integrated Capabilities', () => {
     c._updateDOM('alerts', { notifications: [] });
     expect(el.innerHTML.replace(/\s+/g, ' ').trim()).toContain('No notifications');
   });
+
+  test('Nested Svelte-style conditional blocks ({#if}) compile and evaluate correctly', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-template', `
+      <div class="profile-container">
+        {#if user}
+          {#if user.verified}
+            <div class="profile-card">
+              <h2>{user.name}</h2>
+              {#if user.premium}
+                <div class="premium-badge">Premium</div>
+              {:else}
+                <div class="upgrade-badge">Upgrade</div>
+              {/if}
+            </div>
+          {:else}
+            <div class="verify-card">Verify Account</div>
+          {/if}
+        {:else}
+          <div class="login-card">Login to Continue</div>
+        {/if}
+      </div>
+    `);
+    docElements.push(el);
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    // Scenario 1: No user
+    c._updateDOM('auth/user', { user: null });
+    expect(el.innerHTML.replace(/\s+/g, ' ').trim()).toContain('Login to Continue');
+
+    // Scenario 2: User present but unverified
+    c._updateDOM('auth/user', { user: { name: 'Shankar', verified: false, premium: false } });
+    expect(el.innerHTML.replace(/\s+/g, ' ').trim()).toContain('Verify Account');
+
+    // Scenario 3: User verified but not premium
+    c._updateDOM('auth/user', { user: { name: 'Shankar', verified: true, premium: false } });
+    const out3 = el.innerHTML.replace(/\s+/g, ' ').trim();
+    expect(out3).toContain('<h2>Shankar</h2>');
+    expect(out3).toContain('Upgrade');
+    expect(out3).not.toContain('Premium');
+
+    // Scenario 4: User verified and premium
+    c._updateDOM('auth/user', { user: { name: 'Shankar', verified: true, premium: true } });
+    const out4 = el.innerHTML.replace(/\s+/g, ' ').trim();
+    expect(out4).toContain('<h2>Shankar</h2>');
+    expect(out4).toContain('Premium');
+    expect(out4).not.toContain('Upgrade');
+  });
 });
