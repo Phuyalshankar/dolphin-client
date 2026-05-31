@@ -20,9 +20,9 @@ export function attachDOMBinding(clientProto: any) {
 
     // Helper to compile and render Svelte-like block conditionals ({#if}, {:else if}, {:else}) and dynamic mustaches
     function renderTemplate(templateStr: string, context: any): string {
-        // Fallback / Fast-path: If there are no Svelte-like block conditionals, do simple mustache replacement.
+        // Fallback / Fast-path: If there are no Svelte-like block conditionals or loop blocks, do simple mustache replacement.
         // This is safe against keys with special characters (like user-id++).
-        if (!templateStr.includes('{#if')) {
+        if (!templateStr.includes('{#if') && !templateStr.includes('{#each')) {
             let result = templateStr;
             for (let key in context) {
                 const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -32,22 +32,80 @@ export function attachDOMBinding(clientProto: any) {
         }
 
         try {
-            // 1. Escape backticks in the original template to prevent closing template literal early
-            let escaped = templateStr.replace(/`/g, '\\`');
-            
-            // 2. Compile conditional blocks and mustaches
-            let compiled = escaped
-                .replace(/\{\{([\s\S]*?)\}\}/g, '${$1}')
-                .replace(/\{#if\s+([\s\S]*?)\}/g, '`; if ($1) { out += `')
-                .replace(/\{:else\s+if\s+([\s\S]*?)\}/g, '`; } else if ($1) { out += `')
-                .replace(/\{:else\}/g, '`; } else { out += `')
-                .replace(/\{\/if\}/g, '`; } out += `');
+            // Helper to escape plain text so it is safe to be put in a double-quoted JS string
+            const escapeString = (str: string): string => {
+                return str
+                    .replace(/\\/g, '\\\\')
+                    .replace(/"/g, '\\"')
+                    .replace(/\n/g, '\\n')
+                    .replace(/\r/g, '\\r')
+                    .replace(/\t/g, '\\t');
+            };
+
+            // Compile template using a highly robust tokenized approach
+            // This prevents literal backticks (`) and "${" in original templates from breaking syntax.
+            let compiled = 'let out = "";\n';
+            let lastIndex = 0;
+            const regex = /(\{\{([\s\S]*?)\}\}|\{#if\s+([\s\S]*?)\}|\{:else\s+if\s+([\s\S]*?)\}|\{:else\}|\{\/if\}|\{#each\s+([\s\S]*?)\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s*,\s*([a-zA-Z_$][a-zA-Z0-9_$]*))?\}|\{\/each\}|\{([^{}]+?)\})/g;
+            const eachStack: { indexVar?: string }[] = [];
+
+            let match;
+            while ((match = regex.exec(templateStr)) !== null) {
+                const plainText = templateStr.slice(lastIndex, match.index);
+                if (plainText) {
+                    compiled += `out += "${escapeString(plainText)}";\n`;
+                }
+
+                const token = match[0];
+                if (token.startsWith('{{')) {
+                    const expr = match[2];
+                    compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");\n`;
+                } else if (token.startsWith('{#if')) {
+                    const expr = match[3];
+                    compiled += `if (${expr}) {\n`;
+                } else if (token.startsWith('{:else if')) {
+                    const expr = match[4];
+                    compiled += `} else if (${expr}) {\n`;
+                } else if (token.startsWith('{:else}')) {
+                    compiled += `} else {\n`;
+                } else if (token.startsWith('{/if}')) {
+                    compiled += `}\n`;
+                } else if (token.startsWith('{#each')) {
+                    const expr = match[5];
+                    const itemVar = match[6];
+                    const indexVar = match[7];
+                    eachStack.push({ indexVar });
+                    compiled += `if (typeof ${expr} !== "undefined" && ${expr} !== null && Array.isArray(${expr})) {\n`;
+                    if (indexVar) {
+                        compiled += `  let ${indexVar} = 0;\n`;
+                    }
+                    compiled += `  for (let ${itemVar} of ${expr}) {\n`;
+                } else if (token.startsWith('{/each}')) {
+                    const info = eachStack.pop();
+                    if (info && info.indexVar) {
+                        compiled += `    ${info.indexVar}++;\n`;
+                    }
+                    compiled += `  }\n}\n`;
+                } else if (token.startsWith('{')) {
+                    const expr = match[8];
+                    if (expr) {
+                        compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");\n`;
+                    }
+                }
+
+                lastIndex = regex.lastIndex;
+            }
+
+            const remaining = templateStr.slice(lastIndex);
+            if (remaining) {
+                compiled += `out += "${escapeString(remaining)}";\n`;
+            }
+            compiled += 'return out;\n';
 
             const fnBody = `
                 with (context) {
                     try {
-                        let out = \`${compiled}\`;
-                        return out;
+                        ${compiled}
                     } catch (innerErr) {
                         console.warn('[Dolphin Template Eval Warning]:', innerErr);
                         return '';

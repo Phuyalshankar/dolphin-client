@@ -340,4 +340,74 @@ describe('v2.0 Advanced Integrated Capabilities', () => {
     c._updateDOM('auth/user', { role: 'guest', user: 'Hari' });
     expect(el.innerHTML.trim()).toBe('Guest View');
   });
+
+  test('Robust template compilation handles backticks, nested object properties, and multi-line conditional chains', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-template', `
+      {#if user.role === "admin"}
+        Admin Dashboard: \`Aurora\` Mode for {{user.name}}
+      {:else if user.role === "editor"}
+        Editor panel: {{user.name}}
+      {:else if user.role === "viewer"}
+        Viewer panel: {{user.name}}
+      {:else}
+        Guest Panel
+      {/if}
+    `);
+    docElements.push(el);
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    // Test Admin View with nested object
+    c._updateDOM('auth/user', { user: { role: 'admin', name: 'Shankar' } });
+    expect(el.innerHTML.trim()).toBe('Admin Dashboard: `Aurora` Mode for Shankar');
+
+    // Test Editor View with nested object
+    c._updateDOM('auth/user', { user: { role: 'editor', name: 'Ram' } });
+    expect(el.innerHTML.trim()).toBe('Editor panel: Ram');
+
+    // Test Guest View with nested object
+    c._updateDOM('auth/user', { user: { role: 'guest', name: 'Hari' } });
+    expect(el.innerHTML.trim()).toBe('Guest Panel');
+  });
+
+  test('Svelte-style loop blocks ({#each}), single curly mustaches ({var}), indices, and dynamic attributes evaluate correctly', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-template', `
+      <div class="notifications-container">
+        {#if notifications.length > 0}
+          <h3>You have {notifications.length} notifications</h3>
+          {#each notifications as notification, index}
+            <div class="item" data-api-click="POST /api/reply/{notification.id}">
+              #{index}: {notification.from} -> {notification.message}
+            </div>
+          {/each}
+        {:else}
+          <h3>No notifications</h3>
+        {/if}
+      </div>
+    `);
+    docElements.push(el);
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    // Test notifications array present
+    c._updateDOM('alerts', {
+      notifications: [
+        { id: 101, from: 'Shankar', message: 'Hello!' },
+        { id: 102, from: 'Ram', message: 'Hi there!' }
+      ]
+    });
+
+    const output = el.innerHTML.replace(/\s+/g, ' ').trim();
+    expect(output).toContain('You have 2 notifications');
+    expect(output).toContain('data-api-click="POST /api/reply/101"');
+    expect(output).toContain('#0: Shankar -> Hello!');
+    expect(output).toContain('data-api-click="POST /api/reply/102"');
+    expect(output).toContain('#1: Ram -> Hi there!');
+
+    // Test empty notifications array
+    c._updateDOM('alerts', { notifications: [] });
+    expect(el.innerHTML.replace(/\s+/g, ' ').trim()).toContain('No notifications');
+  });
 });
