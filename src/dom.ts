@@ -18,6 +18,56 @@ export function attachDOMBinding(clientProto: any) {
         return template;
     }
 
+    // Helper to compile and render Svelte-like block conditionals ({#if}, {:else if}, {:else}) and dynamic mustaches
+    function renderTemplate(templateStr: string, context: any): string {
+        // Fallback / Fast-path: If there are no Svelte-like block conditionals, do simple mustache replacement.
+        // This is safe against keys with special characters (like user-id++).
+        if (!templateStr.includes('{#if')) {
+            let result = templateStr;
+            for (let key in context) {
+                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), context[key] !== undefined && context[key] !== null ? context[key] : '');
+            }
+            return result;
+        }
+
+        try {
+            // 1. Escape backticks in the original template to prevent closing template literal early
+            let escaped = templateStr.replace(/`/g, '\\`');
+            
+            // 2. Compile conditional blocks and mustaches
+            let compiled = escaped
+                .replace(/\{\{([\s\S]*?)\}\}/g, '${$1}')
+                .replace(/\{#if\s+([\s\S]*?)\}/g, '`; if ($1) { out += `')
+                .replace(/\{:else\s+if\s+([\s\S]*?)\}/g, '`; } else if ($1) { out += `')
+                .replace(/\{:else\}/g, '`; } else { out += `')
+                .replace(/\{\/if\}/g, '`; } out += `');
+
+            const fnBody = `
+                with (context) {
+                    try {
+                        let out = \`${compiled}\`;
+                        return out;
+                    } catch (innerErr) {
+                        console.warn('[Dolphin Template Eval Warning]:', innerErr);
+                        return '';
+                    }
+                }
+            `;
+            const fn = new Function('context', fnBody);
+            return fn(context);
+        } catch (e) {
+            console.error('[Dolphin Template Compiler Error]:', e);
+            // Fallback: simple replace of double mustache keys
+            let fallback = templateStr;
+            for (let key in context) {
+                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                fallback = fallback.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), context[key] !== undefined && context[key] !== null ? context[key] : '');
+            }
+            return fallback;
+        }
+    }
+
     // ─── PHASE 1: PERFORMANCE & SECURITY HELPERS ──────────────────────────────
 
     // 1. Zero-dependency Browser HTML Sanitizer against XSS
@@ -499,21 +549,11 @@ export function attachDOMBinding(clientProto: any) {
                         if (Array.isArray(result)) {
                             let combinedHTML = '';
                             for (const item of result) {
-                                let finalItemHTML = template;
-                                for (let key in item) {
-                                    const escapedKey = escapeRegExp(key);
-                                    finalItemHTML = finalItemHTML.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), item[key] !== undefined && item[key] !== null ? item[key] : '');
-                                }
-                                combinedHTML += finalItemHTML;
+                                combinedHTML += renderTemplate(template, item);
                             }
                             scheduleDOMUpdate(el, combinedHTML);
                         } else {
-                            let finalHTML = template;
-                            for (let key in result) {
-                                const escapedKey = escapeRegExp(key);
-                                finalHTML = finalHTML.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), result[key] !== undefined && result[key] !== null ? result[key] : '');
-                            }
-                            scheduleDOMUpdate(el, finalHTML);
+                            scheduleDOMUpdate(el, renderTemplate(template, result));
                         }
                     } else {
                         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
@@ -611,21 +651,11 @@ export function attachDOMBinding(clientProto: any) {
                 if (Array.isArray(payload)) {
                     let combinedHTML = '';
                     for (const item of payload) {
-                        let finalItemHTML = template;
-                        for (let key in item) {
-                            const escapedKey = escapeRegExp(key);
-                            finalItemHTML = finalItemHTML.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), item[key] !== undefined && item[key] !== null ? item[key] : '');
-                        }
-                        combinedHTML += finalItemHTML;
+                        combinedHTML += renderTemplate(template, item);
                     }
                     scheduleDOMUpdate(el, combinedHTML); // Batched update + VDOM Diffing!
                 } else {
-                    let finalHTML = template;
-                    for (let key in payload) {
-                        const escapedKey = escapeRegExp(key);
-                        finalHTML = finalHTML.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), payload[key] !== undefined && payload[key] !== null ? payload[key] : '');
-                    }
-                    scheduleDOMUpdate(el, finalHTML); // Batched update + VDOM Diffing!
+                    scheduleDOMUpdate(el, renderTemplate(template, payload)); // Batched update + VDOM Diffing!
                 }
                 return;
             }

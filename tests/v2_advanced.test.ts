@@ -312,4 +312,32 @@ describe('v2.0 Advanced Integrated Capabilities', () => {
 
     expect(el.innerHTML).toBe('ID: USR-101, Price: $99');
   });
+
+  test('Svelte-style block conditional rendering ({#if}, {:else if}, {:else}) evaluates correctly', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-template', `
+      {#if role === "admin"}
+        Admin View: {{user}}
+      {:else if role === "editor"}
+        Editor View: {{user}}
+      {:else}
+        Guest View
+      {/if}
+    `);
+    docElements.push(el);
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    // Test Admin View
+    c._updateDOM('auth/user', { role: 'admin', user: 'Shankar' });
+    expect(el.innerHTML.trim()).toBe('Admin View: Shankar');
+
+    // Test Editor View
+    c._updateDOM('auth/user', { role: 'editor', user: 'Ram' });
+    expect(el.innerHTML.trim()).toBe('Editor View: Ram');
+
+    // Test Guest View
+    c._updateDOM('auth/user', { role: 'guest', user: 'Hari' });
+    expect(el.innerHTML.trim()).toBe('Guest View');
+  });
 });
