@@ -66,27 +66,156 @@ Allows triggering realtime publishes or HTTP API requests on **any** standard br
 </select>
 ```
 
-### ३.३. HTML Templates & Directives
-When data arrives via HTTP API or WebSockets, Dolphin compiles templates on-the-fly and binds sub-attributes.
+### ३.३. Svelte-Style Block Conditionals & Loops (कन्डिसनल र लुप ब्लकहरू)
+When data arrives via HTTP API or WebSockets, Dolphin compiles your templates on-the-fly. In addition to standard double mustache (`{{key}}`) replacements, Dolphin Client v2.0 features a fully integrated **Svelte-Style Template Compiler** natively running in the browser:
 
-- **`data-rt-bind`**: Listens to a real-time topic or HTTP result.
-- **`data-rt-template`**: Multi-line template. Handles both single objects and arrays (automatically loops lists without `.map()`).
-- **`data-rt-text`**: Injects property as safe textContent.
-- **`data-rt-html`**: Injects property as innerHTML.
-- **`data-rt-attr`**: Binds values to custom attributes, format: `attrName:key,attrName2:key2`.
-- **`data-rt-class`**: Toggles classes, format: `className:key`.
-- **`data-rt-if` / `data-rt-hide`**: Conditional display (show/hide).
+- **`{#if expression}` / `{:else if expression}` / `{:else}` / `{/if}`**: Compile Svelte-style conditional flows. You can nest `{#if}` statements to arbitrary levels!
+- **`{#each expression as item}`** or **`{#each expression as item, index}`**: Loop over arrays dynamically. The optional `index` variable starts at `0` and increments automatically.
+- **Single Curly `{expression}` and Double Curly `{{expression}}`**: Output values safely. Dolphin resolves variable paths, nested object properties (like `user.name`), optional chaining (`?.`), and logical operators.
+- **Dynamic Attribute Interpolation**: Interpolates expressions inside standard HTML attributes dynamically (e.g., `src="{user.avatar}"` or `data-api-click="POST /api/reply/{notification.id}"`).
+
+---
+
+### ३.३.१. Real-World Example 1: Multi-Level Nested Conditionals (User Profile Card)
+This example showcases a full dynamic user profile card. It handles states like:
+1. **User not logged in**: Displays login input fields.
+2. **User logged in but unverified**: Displays a warning card with a verification link.
+3. **User verified but not premium**: Displays their details with an upgrade call-to-action button.
+4. **User verified and premium**: Highlights their status with a premium badge.
 
 ```html
-<div data-api-get="/api/devices" data-rt-bind="devices/online" data-rt-template='
-  <div data-rt-type="context" class="card">
-    <span class="status-dot" data-rt-class="bg-emerald-400:isOnline,bg-red-400:isOffline"></span>
-    <h3 data-rt-text="id"></h3>
-    <img data-rt-attr="src:avatarUrl,alt:id" class="avatar" />
-    <button onclick="dialPeer(&apos;{{id}}&apos;)">Call</button>
+<div data-api-get="/api/user/profile" 
+     data-rt-template='
+  <div class="profile-container">
+    {#if user}
+      {#if user.verified}
+        <div class="profile-card fx-aurora">
+          <img src="{user.avatar}" class="avatar" alt="{user.name}" />
+          <h2>{user.name}</h2>
+          <p>{user.email}</p>
+          
+          {#if user.premium}
+            <div class="premium-badge fx-neon">⭐ Premium Member</div>
+            <button class="filled">Access Premium Content</button>
+          {:else}
+            <div class="upgrade-badge fx-glass">Upgrade to Premium</div>
+            <button class="outline">View Plans →</button>
+          {/if}
+        </div>
+      {:else}
+        <div class="verify-card fx-glass">
+          <h3>Verify Your Account</h3>
+          <p>Check your email for verification link</p>
+          <button data-api-click="POST /api/resend-verification">
+            Resend Email
+          </button>
+        </div>
+      {/if}
+    {:else}
+      <div class="login-card fx-glass">
+        <h3>Login to Continue</h3>
+        <input placeholder="Email" />
+        <input type="password" placeholder="Password" />
+        <button class="filled primary">Login</button>
+        <a href="/register">Create Account</a>
+      </div>
+    {/if}
   </div>
 '></div>
 ```
+
+---
+
+### ३.३.२. Real-World Example 2: List Loops with Loop Indices (Notifications Feed)
+This example displays a dynamic list of real-time notifications. It automatically loops over the list, renders specific markup based on notification types (`message`, `alert`, `update`, etc.), prints the sequential loop index (`#0`, `#1`), and binds dynamic HTTP API action triggers to button clicks:
+
+```html
+<div data-rt-bind="notifications"
+     data-rt-template='
+  <div class="notifications-container">
+    {#if notifications.length > 0}
+      <div class="notifications-list">
+        <h3>You have {notifications.length} notifications</h3>
+        
+        {#each notifications as notification, index}
+          <div class="notification-item fx-glass">
+            {#if notification.type === "message"}
+              <div class="message-notification">
+                <span class="icon">💬</span>
+                <div class="content">
+                  <strong>#{index} from {notification.from}</strong>
+                  <p>{notification.message}</p>
+                  
+                  {#if notification.replyNeeded}
+                    <button data-api-click="POST /api/reply/{notification.id}">
+                      Reply
+                    </button>
+                  {:else}
+                    <span class="read-status">✓ Read</span>
+                  {/if}
+                </div>
+              </div>
+              
+            {:else if notification.type === "alert"}
+              <div class="alert-notification fx-neon">
+                <span class="icon">⚠️</span>
+                <div class="content">
+                  <strong>#{index} Alert!</strong>
+                  <p>{notification.message}</p>
+                  
+                  {#if notification.action}
+                    <button data-api-click="POST /api/alert/{notification.id}/action">
+                      {notification.action}
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              
+            {:else if notification.type === "update"}
+              <div class="update-notification">
+                <span class="icon">🔄</span>
+                <div class="content">
+                  <strong>Update Available (v{notification.version})</strong>
+                  <p>{notification.message}</p>
+                  
+                  {#if notification.urgency === "major"}
+                    <button class="urgent" data-api-click="POST /api/update">
+                      Update Now
+                    </button>
+                  {:else}
+                    <button data-api-click="POST /api/update/dismiss">
+                      Dismiss
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              
+            {:else}
+              <div class="default-notification">
+                <span class="icon">📢</span>
+                <div class="content">
+                  <p>{notification.message}</p>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+      
+    {:else}
+      <div class="no-notifications fx-glass">
+        <div class="empty-icon">🔔</div>
+        <h3>No new notifications</h3>
+        <p>You are all caught up!</p>
+      </div>
+    {/if}
+  </div>
+'></div>
+```
+
+---
+
+### ३.३.३. HTML Directives & Sub-bindings (डाइरेक्टिभ्स र सब-बाइन्डिङ)
 
 ### ३.४. Browser-Native Template Tags (No Backticks!)
 To completely avoid multi-line strings, backticks (\`...\`), and quote-escaping issues in your HTML attributes, you can point `data-rt-template` directly to a standard browser-native **`<template>` tag selector**:

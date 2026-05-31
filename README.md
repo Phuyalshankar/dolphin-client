@@ -20,14 +20,22 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 
 ---
 
+## Documentation
+
+> [!TIP]
+> 📖 Read our comprehensive **[Full Developer Tutorial & Integration Guide](file:///c:/Users/USER/Desktop/dolphin-test/fulltutorial.md)** for detailed guides, Next.js setups, WebRTC intercoms, global stores, drag-and-drop sortable lists, and real-world examples!
+
+---
+
 ## Features
 
 - **Hookless Reactivity**: Bind topics to DOM elements via HTML data attributes—no React, Vue, or Angular state management required.
+- **Svelte-Style Templates Compiler**: Native browser compiler supporting Svelte-style loop blocks (`{#each ... as ...}`), multi-level nested conditionals (`{#if} / {:else if} / {:else}`), loop indices (`index`), optional chaining, and dynamic attribute interpolation.
 - **Unified Event Binding**: Loop-based browser event handling for values (`data-rt-push`) and actions (`data-rt-[event]` / `data-api-[event]`).
 - **Context API/Prop drilling in Pure DOM**: Crawls up the DOM tree (`getClosestContext`) to fetch parent contexts and inject parameters.
 - **REST API + Realtime Hybrid Support**: Evaluates templates (`data-rt-template`) on initial HTTP fetches (`data-api-get`) and transitions seamlessly to real-time WebSockets on connection.
 - **WebRTC Intercom Signaling**: Built-in methods to handle peer connections, track negotiation, ICE candidates, and signaling.
-- **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs.
+- **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs (~77KB bundle!).
 
 ### Method 1: NPM (For Modern Bundlers)
 ```bash
