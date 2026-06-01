@@ -45,19 +45,38 @@ npm install dolphin-client
 ### Method 2: Direct Local Download (For No-Install / Plain HTML)
 Tired of the command line and `node_modules` clutter? We've got you covered!
 
-[![Download dolphin-client.js](https://img.shields.io/badge/Download-dolphin--client.js-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://unpkg.com/dolphin-client/dist/dolphin-client.js) &nbsp;&nbsp; [![Download dolphin-bundle.zip](https://img.shields.io/badge/Download-dolphin--bundle.zip-4CAF50?style=for-the-badge&logo=archive&logoColor=white)](https://github.com/Phuyalshankar/dolphin-server-modules/releases/latest/download/dolphin-bundle.zip)
+[![Download dolphin-client.js](https://img.shields.io/badge/Download-dolphin--client.js-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://unpkg.com/dolphin-client/dist/dolphin-client.js) &nbsp;&nbsp; [![Download dolphin-client.min.js (Minified)](https://img.shields.io/badge/Download-dolphin--client.min.js-06B6D4?style=for-the-badge&logo=javascript&logoColor=white)](https://unpkg.com/dolphin-client/dist/dolphin-client.min.js) &nbsp;&nbsp; [![Download dolphin-bundle.zip](https://img.shields.io/badge/Download-dolphin--bundle.zip-4CAF50?style=for-the-badge&logo=archive&logoColor=white)](https://github.com/Phuyalshankar/dolphin-server-modules/releases/latest/download/dolphin-bundle.zip)
 
-*(Right-click on **dolphin-client.js** and select "Save Link As..." to save it directly to your project)*
+> [!IMPORTANT]
+> **How to Download the JS Files:**
+> Clicking the JS download buttons will display the raw JavaScript code in your browser. 
+> To download it as a file:
+> 1. **Right-click** on the yellow/blue button and select **"Save Link As..."** (or "Save Target As...").
+> 2. Or, if you clicked it, press **`Ctrl + S`** (or `Cmd + S` on Mac) on the code page to save it.
+> 3. Alternatively, run these commands in your terminal to download directly:
+>    * **Standard (Development):**
+>      ```bash
+>      curl -o dolphin-client.js https://unpkg.com/dolphin-client/dist/dolphin-client.js
+>      ```
+>    * **Minified (Production):**
+>      ```bash
+>      curl -o dolphin-client.min.js https://unpkg.com/dolphin-client/dist/dolphin-client.min.js
+>      ```
 
+> [!TIP]
+> **If the ZIP file download is unavailable:**
+> You can clone this repository directly or copy the `dist/dolphin-client.js` (or `dist/dolphin-client.min.js`) file from your clone. 
+> For the premium styling layer, create a `dolphin-css.css` file and add the custom effects (like `.fx-glass` and `.fx-neon`) described in the **[Full Developer Tutorial](file:///c:/Users/USER/Desktop/dolphin-test/fulltutorial.md)**.
 
 Extract the zip directly inside your project folder to get a clean local directory structure with pre-bundled assets:
 ```
 my-project/
 ├── css/
-│   └── dolphin-css.css   (DolphinCSS Premium Visuals Layer)
+│   └── dolphin-css.css        (DolphinCSS Premium Visuals Layer)
 ├── js/
-│   └── dolphin-client.js  (Dolphin Reactivity Engine)
-└── index.html             (A ready-to-run skeleton template!)
+│   ├── dolphin-client.js      (Standard Reactivity Engine)
+│   └── dolphin-client.min.js  (Minified Production Reactivity Engine)
+└── index.html                  (A ready-to-run skeleton template!)
 ```
 Inside your HTML, simply link them locally:
 ```html
@@ -102,6 +121,28 @@ await dolphin.connect();
   </div>
 '></div>
 ```
+
+### State Directives & Declarative Actions (New!)
+Manage local numeric/text states and run complex logic (math, conditions, logical toggles) **entirely inside HTML** with absolutely **zero custom JavaScript**:
+
+```html
+<!-- 1. Auto-sync inputs directly into store key -->
+<input data-store-write="app.username" placeholder="Type name..." />
+
+<!-- 2. Auto-read and display the store key in real-time -->
+<span data-store-read="app.username"></span>
+
+<!-- 3. Declarative Action: increment/decrement counter on click -->
+<button data-store-click="app.count = (app.count || 0) + 1">+</button>
+<div data-store-read="app.count">0</div>
+<button data-store-click="app.count = (app.count || 0) - 1">-</button>
+
+<!-- 4. Declarative Action: toggle boolean (e.g. Dark Mode) -->
+<button data-store-click="app.darkMode = !app.darkMode">Toggle Dark Mode</button>
+```
+
+### Zero-Configuration Auto-Initialization
+When loaded via a standard `<script>` tag in browser environments, Dolphin Client automatically boots up a default client instance as `window.dolphin` on `DOMContentLoaded`. This means you can build fully reactive pages with absolutely **zero lines of script tags**!
 
 ## License
 

@@ -367,6 +367,41 @@ export function attachDOMBinding(clientProto: any) {
         return null;
     };
 
+    clientProto._executeStoreAction = function(expression: string) {
+        this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
+        
+        const context = new Proxy({}, {
+            has: (target, prop) => {
+                return true; // Pretend we have every store name!
+            },
+            get: (target, prop) => {
+                if (typeof prop === 'string') {
+                    return new Proxy({}, {
+                        get: (subTarget, subProp) => {
+                            if (typeof subProp === 'string') {
+                                return this.getStoreState(prop, subProp);
+                            }
+                        },
+                        set: (subTarget, subProp, val) => {
+                            if (typeof subProp === 'string') {
+                                this.setStoreState(prop, subProp, val);
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
+                }
+            }
+        });
+
+        try {
+            const fn = new Function('ctx', `with(ctx) { ${expression} }`);
+            fn(context);
+        } catch (err) {
+            console.error('[Dolphin Store Action Error]:', err);
+        }
+    };
+
     /** @private */
     clientProto._initDOMBinding = function() {
         if (this._domInitialized) return;
@@ -569,6 +604,15 @@ export function attachDOMBinding(clientProto: any) {
                         if (apiBtn.hasAttribute('data-api-reload')) window.location.reload();
                     } catch (err) {
                         console.error(`[Dolphin] API ${evtName} Error:`, err);
+                    }
+                }
+
+                const storeActionBtn = e.target.closest(`[data-store-${evtName}]`);
+                if (storeActionBtn) {
+                    if (evtName === 'submit') e.preventDefault();
+                    const expr = storeActionBtn.getAttribute(`data-store-${evtName}`);
+                    if (expr) {
+                        this._executeStoreAction(expr);
                     }
                 }
             });

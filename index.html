@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dolphin Client 🐬 - Premium Local Demo</title>
+    
+    <!-- Google Fonts for premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #0a0f1d;
+            --primary: #06b6d4;
+            --primary-glow: rgba(6, 182, 212, 0.4);
+            --indigo: #6366f1;
+            --indigo-glow: rgba(99, 102, 241, 0.3);
+            --text-light: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Decorative background glows */
+        .glow-bg-1 {
+            position: absolute;
+            top: 10%;
+            left: 15%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+        .glow-bg-2 {
+            position: absolute;
+            bottom: 10%;
+            right: 15%;
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, var(--indigo-glow) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Container styling */
+        .wrapper {
+            position: relative;
+            z-index: 10;
+            max-width: 500px;
+            width: 90%;
+            padding: 20px;
+        }
+
+        /* Frosted Glass Card */
+        .fx-glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .fx-glass:hover {
+            transform: translateY(-8px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+        }
+
+        /* Cyberpunk Neon Header */
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #22d3ee 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 30px;
+            font-weight: 400;
+        }
+
+        /* Form Inputs & Controls */
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 20px;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-light);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        input[type="text"]:focus {
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
+        }
+
+        /* Output Glowing Panel */
+        .display-panel {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            border: 1px dashed rgba(6, 182, 212, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .display-title {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .output-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+            min-height: 2.2rem;
+            margin: 0;
+            word-wrap: break-word;
+        }
+        
+        /* Pulse Animation dot */
+        .pulse-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px #10b981;
+            animation: pulse-glow 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            100% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px #10b981; }
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: #10b981;
+            margin-top: 25px;
+            font-weight: 600;
+        }
+
+        /* Counter styling */
+        .counter-section {
+            margin-top: 30px;
+            padding-top: 25px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            text-align: center;
+        }
+
+        .counter-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: #22d3ee;
+            margin: 10px 0;
+            text-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 1.5rem;
+            font-weight: 600;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+        }
+        .btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+            transform: scale(1.1);
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient glowing backgrounds -->
+    <div class="glow-bg-1"></div>
+    <div class="glow-bg-2"></div>
+
+    <div class="wrapper">
+        <div class="fx-glass">
+            <h1>Dolphin Client 🐬</h1>
+            <div class="subtitle">हाम्रो पहिलो हुकलेस (Hookless) रियाक्टिभिटी परीक्षण</div>
+
+            <!-- १. Input Field: Store मा सोझै लेख्ने (Zero JS Lines!) -->
+            <div class="form-group">
+                <label for="username">तपाईँको नाम लेख्नुहोस्:</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    data-store-write="app.username" 
+                    placeholder="Type something here..." 
+                    autocomplete="off"
+                />
+            </div>
+
+            <!-- २. Display Area: Store बाट डेटा सोझै रिड गर्ने (Zero JS Lines!) -->
+            <div class="display-panel">
+                <div class="display-title">लाइभ रियाक्टिभ आउटपुट</div>
+                <!-- data-store-read ले "app.username" मा भएको भ्यालु सिधै यहाँ देखाउँछ -->
+                <p class="output-text" data-store-read="app.username">...</p>
+            </div>
+
+            <!-- ३. Counter Section (New: Pure HTML Declarative Actions - Zero JS!) -->
+            <div class="counter-section">
+                <label>लाइभ काउन्टर (Store State):</label>
+                <div class="counter-value" data-store-read="app.count">0</div>
+                <div class="btn-group">
+                    <!-- data-store-click ले क्लिक गर्दा सिधै ब्याकग्राउन्डमा स्टोर स्टेट क्यालकुलेसन र अपडेट गर्छ -->
+                    <button class="btn" data-store-click="app.count = (app.count || 0) - 1">−</button>
+                    <button class="btn" data-store-click="app.count = (app.count || 0) + 1">+</button>
+                </div>
+            </div>
+
+            <div class="status-container">
+                <span class="pulse-dot"></span>
+                <span>Dolphin Local Reactive Engine Active</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ४. Dolphin Client Library लोड गर्ने (यसले स्वतः इनिसियलाइज र एक्सनहरू ह्यान्डल गर्छ!) -->
+    <script src="./dolphin-client.js"></script> 
+</body>
+</html>

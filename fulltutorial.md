@@ -472,6 +472,37 @@ Manage client-side global reactive stores without writing custom scripts:
 <span data-store-read="user.name"></span>
 ```
 
+### १०.१.२. Declarative Store Actions (`data-store-[event]`) - बिना जाभास्क्रिप्ट गणित र सर्तहरू (No-JS Calculations & Conditions)
+Dolphin Client v2.0 ले सिधै HTML बाटै डेटा स्टोर अपडेट गर्ने र जस्तोसुकै जटिल गणितीय हिसाब, लजिकल अपरेटर, र सर्तहरू (conditional statements) चलाउने फिचर प्रदान गर्दछ। यसको लागि तपाईँले कुनै जाभास्क्रिप्ट फङ्सन वा `<script>` ट्याग लेख्नै पर्दैन।
+
+तपाईँले `data-store-click`, `data-store-change` जस्ता एट्रिब्युटहरू प्रयोग गरेर सिधै HTML भित्रै जाभास्क्रिप्टका गणितीय सूत्रहरू लेख्न सक्नुहुन्छ:
+
+#### क) गणितीय हिसाबहरू (Mathematical Calculations)
+```html
+<!-- दुईवटा भ्यालु स्वतः गुणन गरेर 'app.total' मा राख्न -->
+<button data-store-click="app.total = app.price * app.quantity">कुल हिसाब निकाल्नुहोस्</button>
+
+<!-- १ देखि १०० सम्मको रेन्डम नम्बर स्वतः जेनेरेट गर्न -->
+<button data-store-click="app.randomNum = Math.floor(Math.random() * 100) + 1">Random Number</button>
+```
+
+#### ख) सर्त र निर्णयहरू (Conditions & Ternary Operators)
+Ternary operator (`condition ? true : false`) वा बहु-लाइन `if/else` सर्तहरू सिधै HTML बाटै चल्छन्:
+```html
+<!-- यदि स्कोर ५० वा सोभन्दा बढी भए 'Passed' नत्र 'Failed' सेट गर्न -->
+<button data-store-click="app.result = (app.score >= 50) ? 'Passed' : 'Failed'">नतिजा हेर्नुहोस्</button>
+
+<!-- यदि काउन्ट १० भन्दा सानो भए बढाउने, नत्र ० मा फर्काउने -->
+<button data-store-click="if (app.count < 10) { app.count++ } else { app.count = 0 }">Incrementor</button>
+```
+
+#### ग) अन-अफ टगल गर्ने (Boolean / Toggle Logic)
+डार्क मोड अन-अफ गर्न वा कुनै स्टेटलाई स्वतः उल्टो (toggle) बनाउन:
+```html
+<!-- darkMode को भ्यालु true भए false र false भए true बनाउन -->
+<button data-store-click="app.darkMode = !app.darkMode">डार्क मोड अन/अफ</button>
+```
+
 ### १०.२. Declarative Validations (`data-validate`)
 Apply robust validation rules to inputs and forms instantly. Tagged invalid inputs automatically receive `.invalid` classes and publish error text:
 

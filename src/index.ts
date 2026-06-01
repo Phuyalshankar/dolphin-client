@@ -23,7 +23,22 @@ attachTesting(DolphinClient.prototype);
 
 if (typeof window !== 'undefined') {
   (window as any).DolphinClient = DolphinClient;
-  // window.dolphin auto-creation removed — user must create their own instance with the correct server URL
+  
+  // Auto-initialize a default client for zero-config plain HTML pages!
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!(window as any).dolphin) {
+      const dolphin = new DolphinClient();
+      (window as any).dolphin = dolphin;
+      
+      console.log('%c🐬 [Dolphin Client] Auto-initialized local reactive engine!', 'color: #06b6d4; font-weight: bold; font-size: 14px;');
+      console.log('%c👉 Tip: You can access the client instance via "window.dolphin" in console.', 'color: #94a3b8; font-style: italic;');
+      
+      // Auto-seed default demo state if the demo input is present on the page
+      if (document.querySelector('[data-store-write="app.username"]')) {
+        (dolphin as any).setStoreState('app', 'username', 'नमस्ते साथी!');
+      }
+    }
+  });
 }
 
 export interface DolphinClientConfig {
