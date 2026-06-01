@@ -116,6 +116,10 @@ export class APIHandler {
         const _isRetry = options._isRetry === true;
         const url = `${this.client.httpUrl}${path.startsWith('/') ? path : '/' + path}`;
 
+        if (this.client.options.debug) {
+            console.log(`%c🚀 [Dolphin API Request]:`, 'color: #3b82f6; font-weight: bold;', method.toUpperCase(), path, body || '');
+        }
+
         const controller = new AbortController();
         const timeoutId  = setTimeout(
             () => controller.abort(),
@@ -163,6 +167,10 @@ export class APIHandler {
 
             if (!response.ok) throw { status: response.status, data };
 
+            if (this.client.options.debug) {
+                console.log(`%c✅ [Dolphin API Success]:`, 'color: #10b981; font-weight: bold;', method.toUpperCase(), path, data);
+            }
+
             // Hookless auth token auto-save
             if (data && typeof data === 'object') {
                 if (data.accessToken) {
@@ -181,6 +189,9 @@ export class APIHandler {
 
         } catch (err) {
             clearTimeout(timeoutId);
+            if (this.client.options.debug) {
+                console.error(`%c❌ [Dolphin API Error]:`, 'color: #ef4444; font-weight: bold;', method.toUpperCase(), path, err);
+            }
             if (err.name === 'AbortError') {
                 throw { status: 408, data: { error: 'Request timed out' } };
             }

@@ -278,6 +278,10 @@ export function attachDOMBinding(clientProto: any) {
         const store = this.uiStores.get(storeName);
         store[key] = val;
 
+        if (this.options.debug) {
+            console.log(`%c💾 [Dolphin Store Update]:`, 'color: #ec4899; font-weight: bold;', `${storeName}.${key}`, '=', val);
+        }
+
         if (typeof document !== 'undefined') {
             const readElements = document.querySelectorAll(`[data-store-read="${storeName}.${key}"]`);
             readElements.forEach((el: any) => {

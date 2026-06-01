@@ -38,6 +38,7 @@ export class DolphinClient {
             chunkSize:        65536,   // 64 KB
             maxReconnect:     5,
             autoRefreshToken: true,
+            debug:            true,
             ...options,
         };
 
@@ -154,6 +155,9 @@ export class DolphinClient {
     _handleMessage(data) {
         try {
             const msg = JSON.parse(data);
+            if (this.options.debug) {
+                console.log('%c📥 [Dolphin WS Incoming]:', 'color: #eab308; font-weight: bold;', msg);
+            }
 
             // Signaling
             if (msg.type && msg.from && (msg.to === this.deviceId || msg.to === 'all')) {
@@ -201,6 +205,9 @@ export class DolphinClient {
 
     /** @private */
     _sendRaw(msg) {
+        if (this.options.debug) {
+            console.log('%c📤 [Dolphin WS Outgoing]:', 'color: #8b5cf6; font-weight: bold;', msg);
+        }
         const str = typeof msg === 'string' ? msg : JSON.stringify(msg);
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             this.socket.send(str);
