@@ -38,7 +38,7 @@ export class DolphinClient {
             chunkSize:        65536,   // 64 KB
             maxReconnect:     5,
             autoRefreshToken: true,
-            debug:            true,
+            debug:            false,
             ...options,
         };
 
