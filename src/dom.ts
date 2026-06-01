@@ -367,7 +367,7 @@ export function attachDOMBinding(clientProto: any) {
         return null;
     };
 
-    clientProto._executeStoreAction = function(expression: string) {
+    clientProto._executeStoreAction = function(expression: string, element?: Element) {
         this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
         
         const context = new Proxy({}, {
@@ -398,7 +398,11 @@ export function attachDOMBinding(clientProto: any) {
             const fn = new Function('ctx', `with(ctx) { ${expression} }`);
             fn(context);
         } catch (err) {
-            console.error('[Dolphin Store Action Error]:', err);
+            console.error('%c[Dolphin Store Action Error]:', 'color: #ef4444; font-weight: bold;', err);
+            if (element) {
+                console.error('%cFailed Element:', 'color: #f97316; font-weight: bold;', element);
+            }
+            console.error('%cFailed Expression:', 'color: #3b82f6; font-style: italic;', expression);
         }
     };
 
@@ -612,7 +616,7 @@ export function attachDOMBinding(clientProto: any) {
                     if (evtName === 'submit') e.preventDefault();
                     const expr = storeActionBtn.getAttribute(`data-store-${evtName}`);
                     if (expr) {
-                        this._executeStoreAction(expr);
+                        this._executeStoreAction(expr, storeActionBtn);
                     }
                 }
             });
