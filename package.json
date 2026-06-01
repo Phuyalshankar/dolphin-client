@@ -1,6 +1,6 @@
 {
   "name": "dolphin-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "HTML is back! Hookless, framework-agnostic real-time reactive DOM-binding client for Dolphin Server with WebSockets, WebRTC signaling, and offline REST API fallbacks.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -16,7 +16,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "fulltutorial.md"
   ],
   "scripts": {
     "build": "npm run build:iife && npm run build:min && npm run build:esm && npm run build:cjs && tsc",

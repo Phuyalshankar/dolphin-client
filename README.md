@@ -23,7 +23,7 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 ## Documentation
 
 > [!TIP]
-> 📖 Read our comprehensive **[Full Developer Tutorial & Integration Guide](./fulltutorial.md)** for detailed guides, Next.js setups, WebRTC intercoms, global stores, drag-and-drop sortable lists, and real-world examples!
+> 📖 Read our comprehensive **[Full Developer Tutorial & Integration Guide](https://github.com/Phuyalshankar/dolphin-client/blob/main/fulltutorial.md)** for detailed guides, Next.js setups, WebRTC intercoms, global stores, drag-and-drop sortable lists, and real-world examples!
 
 ---
 
@@ -70,7 +70,7 @@ Tired of the command line and `node_modules` clutter? We've got you covered!
 > [!TIP]
 > **If the ZIP file download is unavailable:**
 > You can clone this repository directly or copy the `dist/dolphin-client.js` (or `dist/dolphin-client.min.js`) file from your clone. 
-> For the premium styling layer, create a `dolphin-css.css` file and add the custom effects (like `.fx-glass` and `.fx-neon`) described in the **[Full Developer Tutorial](./fulltutorial.md)**.
+> For the premium styling layer, create a `dolphin-css.css` file and add the custom effects (like `.fx-glass` and `.fx-neon`) described in the **[Full Developer Tutorial](https://github.com/Phuyalshankar/dolphin-client/blob/main/fulltutorial.md)**.
 
 Extract the zip directly inside your project folder to get a clean local directory structure with pre-bundled assets:
 ```
