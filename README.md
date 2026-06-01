@@ -23,7 +23,7 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 ## Documentation
 
 > [!TIP]
-> 📖 Read our comprehensive **[Full Developer Tutorial & Integration Guide](file:///c:/Users/USER/Desktop/dolphin-test/fulltutorial.md)** for detailed guides, Next.js setups, WebRTC intercoms, global stores, drag-and-drop sortable lists, and real-world examples!
+> 📖 Read our comprehensive **[Full Developer Tutorial & Integration Guide](./fulltutorial.md)** for detailed guides, Next.js setups, WebRTC intercoms, global stores, drag-and-drop sortable lists, and real-world examples!
 
 ---
 
@@ -35,7 +35,11 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 - **Context API/Prop drilling in Pure DOM**: Crawls up the DOM tree (`getClosestContext`) to fetch parent contexts and inject parameters.
 - **REST API + Realtime Hybrid Support**: Evaluates templates (`data-rt-template`) on initial HTTP fetches (`data-api-get`) and transitions seamlessly to real-time WebSockets on connection.
 - **WebRTC Intercom Signaling**: Built-in methods to handle peer connections, track negotiation, ICE candidates, and signaling.
-- **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs (~77KB bundle!).
+- **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs (~39KB compressed bundle!).
+
+---
+
+## Installation & Setup
 
 ### Method 1: NPM (For Modern Bundlers)
 ```bash
@@ -66,7 +70,7 @@ Tired of the command line and `node_modules` clutter? We've got you covered!
 > [!TIP]
 > **If the ZIP file download is unavailable:**
 > You can clone this repository directly or copy the `dist/dolphin-client.js` (or `dist/dolphin-client.min.js`) file from your clone. 
-> For the premium styling layer, create a `dolphin-css.css` file and add the custom effects (like `.fx-glass` and `.fx-neon`) described in the **[Full Developer Tutorial](file:///c:/Users/USER/Desktop/dolphin-test/fulltutorial.md)**.
+> For the premium styling layer, create a `dolphin-css.css` file and add the custom effects (like `.fx-glass` and `.fx-neon`) described in the **[Full Developer Tutorial](./fulltutorial.md)**.
 
 Extract the zip directly inside your project folder to get a clean local directory structure with pre-bundled assets:
 ```
@@ -84,65 +88,104 @@ Inside your HTML, simply link them locally:
 <script src="js/dolphin-client.js"></script>
 ```
 
-## Basic Usage
+---
 
-### 1. In Modern Bundlers (Next.js, Vite, React)
+## Interactive Examples Guide
 
-```javascript
-import { DolphinClient } from 'dolphin-client';
+Below are clean, ready-to-use HTML examples for the core features of Dolphin Client. Because Dolphin supports **Zero-Configuration Auto-Initialization**, these will run instantly!
 
-const dolphin = new DolphinClient('http://localhost:3000', 'ROOM_101');
-await dolphin.connect();
-```
-
-### 2. In Plain HTML (Static / Script Tag)
+### 1. Real-Time (RT) Pub/Sub (Real-time Chat)
+Publish inputs on typing, and display incoming messages in real-time under a WebSocket topic:
 
 ```html
-<script src="node_modules/dolphin-client/dist/dolphin-client.js"></script>
-<script>
-  const dolphin = new DolphinModule.DolphinClient('http://localhost:3000', 'ROOM_101');
-  dolphin.connect();
-</script>
-```
+<!-- Automatically publishes typed values to topic 'chat/messages' -->
+<input name="chatMessage" data-rt-push="chat/messages" placeholder="Type a message..." />
 
-## HTML Directives
-
-### Pushing value changes
-```html
-<input name="chat" data-rt-push="chat/messages/ROOM_101" placeholder="Type..." />
-```
-
-### Directives & Templates
-```html
-<div data-api-get="/api/devices" data-rt-bind="devices/online" data-rt-template='
-  <div data-rt-type="context">
-    <h3>{{id}}</h3>
-    <button onclick="dialPeer(&apos;{{id}}&apos;)">Dial</button>
+<!-- Displays and appends all incoming messages under 'chat/messages' -->
+<div data-rt-bind="chat/messages" data-rt-template='
+  <div class="message-card">
+    <span class="user-label">@user:</span>
+    <p>{{chatMessage}}</p>
   </div>
 '></div>
 ```
 
-### State Directives & Declarative Actions (New!)
-Manage local numeric/text states and run complex logic (math, conditions, logical toggles) **entirely inside HTML** with absolutely **zero custom JavaScript**:
+### 2. REST API Integration (Reactive List Loader)
+Fetch data instantly via REST API on page load and compile templates dynamically:
 
 ```html
-<!-- 1. Auto-sync inputs directly into store key -->
+<!-- Fetches from GET /api/devices, compiles items inside #device-card-template -->
+<div data-api-get="/api/devices" data-rt-template="#device-card-template">
+  <!-- Loading spinner placeholder: automatically removed when data arrives! -->
+  <div class="spinner">Loading devices...</div>
+</div>
+
+<!-- Browser-Native Template Tag (No quote-escaping or backticks needed!) -->
+<template id="device-card-template">
+  <div class="device-card">
+    <h3>{{name}}</h3>
+    <span class="badge">{{status}}</span>
+  </div>
+</template>
+```
+
+### 3. Declarative Form Validation
+Apply strong validation rules to inputs and display errors directly in the UI with absolutely **zero JavaScript**:
+
+```html
+<form id="login-form" data-api-submit="POST /api/login">
+  <div class="form-group">
+    <input name="email" data-validate="required,email" placeholder="Your Email" />
+    <!-- Automatically reads and displays validation error directly in the UI -->
+    <span class="error-msg" data-rt-bind="errors/email"></span>
+  </div>
+
+  <div class="form-group">
+    <input name="password" type="password" data-validate="required,min:8" placeholder="Password" />
+    <span class="error-msg" data-rt-bind="errors/password"></span>
+  </div>
+
+  <button type="submit">Log In</button>
+</form>
+```
+
+### 4. Global State & Declarative Store Actions (No-JS Actions!)
+Manage local stores and run complex calculations, conditions, and toggles **directly in HTML attributes**:
+
+```html
+<!-- 1. Auto-sync inputs directly into store key 'app.username' -->
 <input data-store-write="app.username" placeholder="Type name..." />
+<h3 data-store-read="app.username"></h3>
 
-<!-- 2. Auto-read and display the store key in real-time -->
-<span data-store-read="app.username"></span>
+<!-- 2. Pure HTML Mathematical Counter -->
+<div class="counter-box">
+  <div class="counter-value" data-store-read="app.count">0</div>
+  <!-- Updates state directly in HTML click. Dolphin updates the UI dynamically! -->
+  <button data-store-click="app.count = (app.count || 0) + 1">+</button>
+  <button data-store-click="app.count = (app.count || 0) - 1">-</button>
+</div>
 
-<!-- 3. Declarative Action: increment/decrement counter on click -->
-<button data-store-click="app.count = (app.count || 0) + 1">+</button>
-<div data-store-read="app.count">0</div>
-<button data-store-click="app.count = (app.count || 0) - 1">-</button>
+<!-- 3. Complex Calculations (e.g. Area & Billing) -->
+<button data-store-click="
+  app.area = 3.14159 * (app.radius * app.radius);
+  app.circumference = 2 * 3.14159 * app.radius
+">
+  Calculate Circle
+</button>
 
-<!-- 4. Declarative Action: toggle boolean (e.g. Dark Mode) -->
+<!-- 4. Logic Toggles (e.g. Dark Mode Toggle) -->
 <button data-store-click="app.darkMode = !app.darkMode">Toggle Dark Mode</button>
 ```
 
-### Zero-Configuration Auto-Initialization
-When loaded via a standard `<script>` tag in browser environments, Dolphin Client automatically boots up a default client instance as `window.dolphin` on `DOMContentLoaded`. This means you can build fully reactive pages with absolutely **zero lines of script tags**!
+### 5. Silent Zero-Configuration Auto-Initialization
+When loaded via a standard `<script>` tag in browser environments, Dolphin Client automatically boots up a default client instance as `window.dolphin` on `DOMContentLoaded`.
+
+For debugging, pass `data-debug="true"` on your script tag to turn on gorgeous, color-coded logging in your developer console for all API calls, WebSocket events, and Store updates:
+```html
+<script src="js/dolphin-client.js" data-debug="true"></script>
+```
+
+---
 
 ## License
 

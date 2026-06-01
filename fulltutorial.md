@@ -633,7 +633,7 @@ Broaden your app into a cooperative space:
 
 ## १३. Standalone Testing Utilities (DolphinTestUtils)
 
-For continuous integration (CI) and automated tests, Dolphin Client v2.0 exposes a clean standalone testing bundle inside [src/testing.ts](file:///C:/Users/USER/Desktop/dolphin-test/src/testing.ts):
+For continuous integration (CI) and automated tests, Dolphin Client v2.0 exposes a clean standalone testing bundle inside [src/testing.ts](./src/testing.ts):
 
 - **`DolphinTestUtils.mockWebSocket()`**: Injects a high-fidelity WebSocket mock constructor that captures outbound payloads into `sentMessages`, mimics connection state transitions, and manages message broadcasting.
 - **Event Simulators**: Programmatically trigger `click` and `change` inputs to test DOM directives in Node.js/Jest environments with zero headless browser requirements.
