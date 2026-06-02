@@ -397,4 +397,76 @@ describe('DOM Binding', () => {
 
     global.setTimeout = originalSetTimeout;
   });
+
+  test('Proxy-based template rendering prevents ReferenceError for uninitialized keys', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-template', '{#each products.filter(p => !category) as item}<span>{{item.name}}</span>{/each}');
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    // Notice we do NOT define 'category' in the store context object.
+    // The proxy should prevent a ReferenceError.
+    const storeState = {
+      products: [{ name: 'Laptop' }, { name: 'Phone' }]
+    };
+
+    c._updateDOM('store/app', storeState);
+    expect(el.innerHTML).toBe('<span>Laptop</span><span>Phone</span>');
+  });
+
+  test('_scanAndFetchAPIBinds sets store state and skips direct _updateDOM rendering when data-api-store is present', async () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-api-get', 'https://fakestoreapi.com/products');
+    el.setAttribute('data-api-store', 'app.products');
+    el.setAttribute('data-rt-bind', 'store/app');
+    el.setAttribute('data-rt-template', '{{products.length}} items');
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    const mockProducts = [{ id: 1, title: 'Item 1' }, { id: 2, title: 'Item 2' }];
+    c.api.get = jest.fn().mockResolvedValue(mockProducts);
+    c.setStoreState = jest.fn();
+    c._updateDOM = jest.fn();
+
+    await c._scanAndFetchAPIBinds();
+
+    expect(c.api.get).toHaveBeenCalledWith('https://fakestoreapi.com/products');
+    expect(c.setStoreState).toHaveBeenCalledWith('app', 'products', mockProducts);
+    expect(c._updateDOM).not.toHaveBeenCalled();
+  });
+
+  test('declarative filtering, searching, and sorting pre-processes lists correctly', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-bind', 'store/app');
+    el.setAttribute('data-rt-template', '<span>{{name}}</span>');
+    el.setAttribute('data-rt-filter', 'category == app.category');
+    el.setAttribute('data-rt-search', 'name == app.search');
+    el.setAttribute('data-rt-sort', 'app.sortBy');
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    // Seed mock stores
+    c.uiStores = new Map();
+    c.uiStores.set('app', {
+      category: 'electronics',
+      search: 'phone',
+      sortBy: 'price-low'
+    });
+
+    const mockPayload = {
+      items: [
+        { name: 'Dell Laptop', category: 'electronics', price: 900 },
+        { name: 'Pixel Phone', category: 'electronics', price: 600 },
+        { name: 'Apple Phone', category: 'electronics', price: 1000 },
+        { name: 'Gold Ring', category: 'jewelry', price: 300 }
+      ]
+    };
+
+    // This should filter by category "electronics", search by query "phone" (matching Pixel and Apple),
+    // and sort by price ascending (Pixel Phone 600, then Apple Phone 1000)
+    const processed = c._applyDeclarativeDirectives(el, mockPayload);
+
+    expect(processed.items.length).toBe(2);
+    expect(processed.items[0].name).toBe('Pixel Phone');
+    expect(processed.items[1].name).toBe('Apple Phone');
+  });
 });

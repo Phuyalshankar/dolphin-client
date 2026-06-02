@@ -29,13 +29,16 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 
 ## Features
 
+- **Universal Backend Compatibility**: Native out-of-the-box support for PHP (Laravel, CakePHP, WordPress) and Node.js (Express, NestJS, Fastify). Auto-extracts/injects CSRF tokens and nonces, normalizes multi-format validation error payloads directly into reactive forms, and supports HTTP method spoofing (`_method`) and subfolder base URLs automatically.
+- **HTML Component Imports (`data-import`)**: Declaratively import reusable layouts (e.g. `header.html`, `footer.html`) dynamically in pure HTML with robust concurrent promise caching, nested rendering, and circular dependency checks.
+- **Instant SPA Viewport Router (`data-spa`)**: Converts static pages into highly responsive Single Page Applications (SPAs) with zero manual JS. High-jacks links, swaps viewports dynamically with smooth fading transitions, and updates page titles and history navigation (`popstate`).
 - **Hookless Reactivity**: Bind topics to DOM elements via HTML data attributes—no React, Vue, or Angular state management required.
 - **Svelte-Style Templates Compiler**: Native browser compiler supporting Svelte-style loop blocks (`{#each ... as ...}`), multi-level nested conditionals (`{#if} / {:else if} / {:else}`), loop indices (`index`), optional chaining, and dynamic attribute interpolation.
 - **Unified Event Binding**: Loop-based browser event handling for values (`data-rt-push`) and actions (`data-rt-[event]` / `data-api-[event]`).
 - **Context API/Prop drilling in Pure DOM**: Crawls up the DOM tree (`getClosestContext`) to fetch parent contexts and inject parameters.
 - **REST API + Realtime Hybrid Support**: Evaluates templates (`data-rt-template`) on initial HTTP fetches (`data-api-get`) and transitions seamlessly to real-time WebSockets on connection.
 - **WebRTC Intercom Signaling**: Built-in methods to handle peer connections, track negotiation, ICE candidates, and signaling.
-- **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs (~39KB compressed bundle!).
+- **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs (~47KB compressed bundle!).
 
 ---
 

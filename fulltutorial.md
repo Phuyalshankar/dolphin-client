@@ -731,4 +731,98 @@ By marrying the **reactive strength of Dolphin Client** with the **premium desig
 - **Auto Reconnect Policy**: Dolphin Client has an exponentional backoff reconnect strategy built-in. Set `maxReconnect` options to customize connection retry budgets.
 - **Graceful Hardware Fallbacks**: Always test your WebRTC systems with receive-only transceivers (`recvonly`) so desktop terminals with no microphoness/cameras can still receive and play signals properly.
 
+---
+
+## १६. Universal Backend Frameworks Integration (PHP & Node.js ब्याकइन्ड एकीकरण)
+
+Dolphin Client comes with **native out-of-the-box support** for major backend frameworks, including PHP frameworks (CakePHP, WordPress, Laravel) and Node.js backend frameworks (Express, NestJS, Fastify). You do not need to configure any custom ajax headers or write error-handling logic—Dolphin handles it directly!
+
+### १६.१. Automatic CSRF and Nonce Token Injection
+Mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) are automatically injected with security verification tokens to bypass server-side security checks:
+1. **Laravel**: Automatically reads standard token `<input type="hidden" name="_token" value="...">` produced by `@csrf` or `csrf-token` meta tags.
+2. **CakePHP**: Grabs `_csrfToken` hidden input fields or `csrfToken` cookies.
+3. **WordPress**: Automatically retrieves security nonces from `window.wpApiSettings.nonce` or `<meta name="wp-nonce">` and injects them in `X-WP-Nonce` header.
+4. **Node.js (CSRF protection)**: Reads standard `XSRF-TOKEN` or `_csrf` cookies/meta tags.
+
+Dolphin automatically injects these tokens inside the **Request Headers** (`X-CSRF-Token`, `X-XSRF-TOKEN`, `X-WP-Nonce`) and **Request Payload** (`_csrfToken`, `_token`, `_csrf`) under the hood!
+
+### १६.२. HTTP Method Spoofing (`_method`)
+Traditional HTML forms only support `GET` and `POST`. PHP and Node.js backend routers support HTTP Method Spoofing to process `PUT`, `PATCH`, or `DELETE`.
+If `methodSpoofing: true` is configured in `options`, or a hidden `<input type="hidden" name="_method" value="PUT">` is present in a form:
+- Dolphin Client maps the fetch request method to a `POST`.
+- Attaches the spoofed method as a request header `X-HTTP-Method-Override: PUT` and inside the payload body as `_method: "PUT"`.
+
+### १६.३. Unified Validation Error Parsing
+Different backends output validation errors in different structures. Dolphin Client includes a **Universal Error Adapter** that normalizes all formats into a flat `{ [field]: errorMessage }` object, then automatically publishes them to state `errors/{field}`:
+- **Laravel / Yii Format**: `{ errors: { email: ["Must be valid email"] } }` → `errors/email` is updated.
+- **CakePHP Format**: `{ errors: { email: { _required: "Email is required" } } }` → `errors/email` is updated.
+- **Node.js (Joi/Yup/Express-Validator) Format**: `[ { path: "email", msg: "Invalid email" } ]` → `errors/email` is updated.
+
+This means you can display server-side validation errors in HTML instantly with **zero JavaScript**:
+```html
+<form data-api-submit="POST /users/register">
+  <input name="email" />
+  <!-- Server-side validation errors show up here instantly! -->
+  <span class="error" data-rt-bind="errors/email"></span>
+</form>
+```
+
+### १६.४. Base Path & Subfolder Resolution
+If your PHP/WordPress application is hosted locally under a subfolder (e.g. `http://localhost/my-wp-site/`), Dolphin Client automatically respects the `<base href="...">` or `<meta name="base-path">` tags to dynamically prefix all relative API targets (e.g., resolving `data-api-get="/api/posts"` to `http://localhost/my-wp-site/api/posts`).
+
+---
+
+## १७. Buildless SPA Architecture: Component Imports & Link Routing
+
+Dolphin Client v2.0 empowers you to build pure, lightning-fast **Single Page Applications (SPAs)** using standard static HTML pages (like `home.html`, `about.html`, `product.html`) with **exactly zero lines of manual frontend JS** and **zero compiler/bundler setups!**
+
+### १७.१. Declarative Component Layout Imports (`data-import`)
+Rather than copy-pasting headers, navs, and footers across all HTML pages, you can declare layouts dynamically:
+```html
+<!-- index.html (Master Layout) -->
+<body>
+  <!-- Imports header.html into this container dynamically -->
+  <div data-import="components/header.html"></div>
+  
+  <main id="viewport">
+    <h1>Page Content</h1>
+  </main>
+  
+  <div data-import="components/footer.html"></div>
+</body>
+```
+
+#### Under the Hood:
+- **Promise-Based Caching**: Multiple duplicate imports of the same component (like identical buttons or sidebars) are fetched **exactly once** from the server using concurrent promise resolution.
+- **Recursive Resolution**: Imported files can safely import sub-files (e.g., `header.html` importing `nav.html`).
+- **Circular Check**: Safely breaks circular locks (e.g. layout A importing layout B which imports layout A) and displays an alert.
+- **Reactivity Re-scanning**: Dolphin automatically executes store and DOM binding scans on newly imported HTML components.
+
+### १७.२. Instant SPA Viewport Router (`data-spa`)
+Converts traditional page transitions into a smooth Single Page Application experience by hijacking links:
+```html
+<!-- Links with data-spa will route dynamically without reloads! -->
+<nav>
+  <a href="home.html" data-spa>Home</a>
+  <a href="about.html" data-spa>About Us</a>
+  <a href="product.html" data-spa>Products</a>
+</nav>
+```
+
+#### Configuration Options (in constructor):
+- **`routerViewport`**: Selector pointing to the container to be replaced (default: `'main, #viewport, body'`).
+- **`routerTransitions`**: Enables a smooth CSS fade transition between viewport changes (default: `true`).
+
+```javascript
+const dolphin = new DolphinModule.DolphinClient(undefined, undefined, {
+  routerViewport: '#viewport',
+  routerTransitions: true
+});
+```
+
+#### Transition Styles (automatically injected):
+When navigating, Dolphin applies a fading animation by adding `.dolphin-fade-out` and `.dolphin-fade-in` to the viewport, giving your buildless static site a fluid, modern, app-like finish!
+
+---
+
 Enjoy building hookless, lightning-fast, and premium real-time applications with **Dolphin Client**! 🐬

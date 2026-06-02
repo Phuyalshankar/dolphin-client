@@ -39,6 +39,9 @@ export class DolphinClient {
             maxReconnect:     5,
             autoRefreshToken: true,
             debug:            false,
+            methodSpoofing:   false,
+            routerViewport:   'main, #viewport, body',
+            routerTransitions: true,
             ...options,
         };
 
