@@ -3,6 +3,8 @@ export class DolphinStore {
     data: Map<string, any>;
     listeners: Set<any>;
     subscribed: Set<string>;
+    /** @fix: Store unsubscribe functions so destroy() can clean up WS subscriptions (was: subscriptions never removed) */
+    _unsubscribers: Map<string, () => void>;
 
     /** @param {DolphinClient} client */
     constructor(client) {
@@ -13,6 +15,8 @@ export class DolphinStore {
         this.listeners = new Set();
         /** @type {Set<string>} */
         this.subscribed = new Set();
+        /** @type {Map<string, () => void>} */
+        this._unsubscribers = new Map();
 
         return new Proxy(this, {
             get: (target, prop) => {
@@ -70,9 +74,11 @@ export class DolphinStore {
             this._applyTransform(state);
 
             if (!this.subscribed.has(name)) {
-                this.client.subscribe(`db:sync/${name.toLowerCase()}`, (update) => {
-                    this._handleRemoteUpdate(name, update);
-                });
+                // @fix: Store the unsubscribe function so destroy() can clean up (was: subscription leaked)
+                const unsubscribe = () => this.client.unsubscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
+                const updateHandler = (update: any) => { this._handleRemoteUpdate(name, update); };
+                this.client.subscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
+                this._unsubscribers.set(name, unsubscribe);
                 this.subscribed.add(name);
             }
         } catch (e) {
@@ -135,6 +141,21 @@ export class DolphinStore {
     /** @private */
     _notify() {
         this.listeners.forEach(l => l());
+    }
+
+    /**
+     * Clean up all WebSocket subscriptions and listeners.
+     * Call this when the store is no longer needed to prevent resource leaks.
+     */
+    destroy() {
+        // @fix: Unsubscribe all WebSocket topics (was: no cleanup method, all subscriptions leaked)
+        this._unsubscribers.forEach(unsub => {
+            try { unsub(); } catch {}
+        });
+        this._unsubscribers.clear();
+        this.subscribed.clear();
+        this.listeners.clear();
+        this.data.clear();
     }
 }
 

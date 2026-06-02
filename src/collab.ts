@@ -2,6 +2,12 @@ export function attachCollab(clientProto: any) {
   clientProto._initCollab = function() {
     if (typeof document === 'undefined') return;
 
+    // @fix: Track remote cursor elements so they can be cleaned up (was: cursor divs leaked forever)
+    const remoteCursors = new Map<string, HTMLElement>();
+    // @fix: Track stale cursor cleanup timers
+    const cursorStaleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const CURSOR_STALE_MS = 5000; // remove cursor after 5s of inactivity
+
     // 1. Mouse Cursors Realtime Sharing (data-rt-cursor-share="roomName")
     this.addDomListener(document, 'mousemove', (e: MouseEvent) => {
       const shareContainers = document.querySelectorAll('[data-rt-cursor-share]');
@@ -46,9 +52,11 @@ export function attachCollab(clientProto: any) {
         publishTyping(true);
       }
 
+      // @fix: Clear previous timer before setting new one, and store so cleanup can cancel it
       if (e.target._typingTimer) clearTimeout(e.target._typingTimer);
       e.target._typingTimer = setTimeout(() => {
         e.target._isTyping = false;
+        e.target._typingTimer = null;
         publishTyping(false);
       }, 2000);
     });
@@ -82,24 +90,39 @@ export function attachCollab(clientProto: any) {
       const container = document.querySelector(`[data-rt-cursor-share="${room}"]`);
       if (!container) return;
 
+      const cursorKey = `${room}::${remoteDeviceId}`;
+
       // Find or create remote cursor element
-      let cursorEl = container.querySelector(`.rt-cursor-${remoteDeviceId}`) as HTMLElement;
-      if (!cursorEl) {
+      let cursorEl = remoteCursors.get(cursorKey);
+      if (!cursorEl || !document.contains(cursorEl)) {
         cursorEl = document.createElement('div');
         cursorEl.className = `rt-cursor rt-cursor-${remoteDeviceId}`;
         cursorEl.style.position = 'absolute';
         cursorEl.style.width = '10px';
         cursorEl.style.height = '10px';
         cursorEl.style.borderRadius = '50%';
-        cursorEl.style.backgroundColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        cursorEl.style.backgroundColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
         cursorEl.style.pointerEvents = 'none';
         container.appendChild(cursorEl);
+        // @fix: Track created cursor so cleanup can remove it (was: cursor elements never tracked)
+        remoteCursors.set(cursorKey, cursorEl);
       }
 
       // Update cursor coordinates ratio in pixels
       const box = container.getBoundingClientRect();
       cursorEl.style.left = (payload.x * box.width) + 'px';
       cursorEl.style.top = (payload.y * box.height) + 'px';
+
+      // @fix: Reset stale timer — remove cursor after CURSOR_STALE_MS of no updates
+      if (cursorStaleTimers.has(cursorKey)) {
+        clearTimeout(cursorStaleTimers.get(cursorKey)!);
+      }
+      cursorStaleTimers.set(cursorKey, setTimeout(() => {
+        const el = remoteCursors.get(cursorKey);
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        remoteCursors.delete(cursorKey);
+        cursorStaleTimers.delete(cursorKey);
+      }, CURSOR_STALE_MS));
     });
 
     this.subscribe('collab/+/crdt', (payload: any, topic: string) => {
@@ -123,5 +146,15 @@ export function attachCollab(clientProto: any) {
         }
       });
     });
+
+    // @fix: Expose cleanup so disconnect() can remove all cursor elements and cancel stale timers
+    this._collabCleanup = () => {
+      cursorStaleTimers.forEach(t => clearTimeout(t));
+      cursorStaleTimers.clear();
+      remoteCursors.forEach(el => {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      });
+      remoteCursors.clear();
+    };
   };
 }

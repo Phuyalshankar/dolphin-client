@@ -38,6 +38,7 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 - **Context API/Prop drilling in Pure DOM**: Crawls up the DOM tree (`getClosestContext`) to fetch parent contexts and inject parameters.
 - **REST API + Realtime Hybrid Support**: Evaluates templates (`data-rt-template`) on initial HTTP fetches (`data-api-get`) and transitions seamlessly to real-time WebSockets on connection.
 - **WebRTC Intercom Signaling**: Built-in methods to handle peer connections, track negotiation, ICE candidates, and signaling.
+- **DolphinStore JS API & React Integration**: Programmatic store query, filtering (`where`), sorting (`orderBy`), and live collection syncing with auto-REST/WS fallback. Integrates seamlessly with React (class or hook components) using native external store subscriptions.
 - **Ultralight weight**: Zero external dependencies, pure browser-native runtime APIs (~47KB compressed bundle!).
 
 ---
@@ -180,7 +181,26 @@ Manage local stores and run complex calculations, conditions, and toggles **dire
 <button data-store-click="app.darkMode = !app.darkMode">Toggle Dark Mode</button>
 ```
 
-### 5. Silent Zero-Configuration Auto-Initialization
+### 5. JavaScript Store API & React Integration
+Query and filter dynamic collections programmatically in JS or sync them with React without state hooks:
+
+```javascript
+// Access the reactive store (auto-fetches GET /users and subscribes to WS db:sync/users)
+const users = dolphin.store.users;
+
+// Dynamic client-side filtering and sorting
+const activeAdmins = users.where(u => u.active && u.role === 'admin').orderBy('name', 'asc');
+
+// Subscribe to store changes manually
+const unsubscribe = dolphin.store.subscribe(() => {
+  console.log("Updated admin count:", activeAdmins.items.length);
+});
+
+// Clean up when no longer needed to prevent memory leaks
+dolphin.store.destroy();
+```
+
+### 6. Silent Zero-Configuration Auto-Initialization
 When loaded via a standard `<script>` tag in browser environments, Dolphin Client automatically boots up a default client instance as `window.dolphin` on `DOMContentLoaded`.
 
 For debugging, pass `data-debug="true"` on your script tag to turn on gorgeous, color-coded logging in your developer console for all API calls, WebSocket events, and Store updates:

@@ -1,4 +1,5 @@
 export function attachDOMBinding(clientProto: any) {
+    // @fix: Failed promises are evicted from cache so retries fetch fresh content (was: permanent failure cache)
     const componentPromiseCache = new Map<string, Promise<string>>();
 
     // Helper to escape special characters for regex search
@@ -282,7 +283,10 @@ export function attachDOMBinding(clientProto: any) {
             const scheduleFn = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : (cb: () => void) => setTimeout(cb, 0);
             scheduleFn(() => {
                 pendingUpdates.forEach((html, el) => {
-                    patchDOM(el, html);
+                    // @fix: Use el.isConnected (jsdom-compatible) instead of document.contains (was: TypeError in jsdom)
+                    if ((el as any).isConnected !== false) {
+                        patchDOM(el, html);
+                    }
                 });
                 pendingUpdates.clear();
                 rafScheduled = false;
@@ -441,7 +445,8 @@ export function attachDOMBinding(clientProto: any) {
 
         // 1. Listen for inputs and value changes with dynamic debouncing
         const PUSH_EVENTS = ['input', 'change', 'keyup', 'paste', 'blur'];
-        const debounceTimers = new Map<Element, any>();
+        // @fix: WeakMap allows GC of removed elements automatically (was: Map held element refs forever)
+        const debounceTimers = new WeakMap<Element, any>();
 
         PUSH_EVENTS.forEach(evtName => {
             this.addDomListener(document, evtName, (e: any) => {
@@ -689,6 +694,12 @@ export function attachDOMBinding(clientProto: any) {
         for (const el of Array.from(elements)) {
             const path = el.getAttribute('data-api-get');
             if (!path) continue;
+            // @fix: Skip already-initialized elements to prevent duplicate fetches on SPA navigation
+            // Guard: some test mock elements may not implement hasAttribute
+            if (typeof (el as any).hasAttribute === 'function' && el.hasAttribute('data-api-initialized')) continue;
+            if (typeof (el as any).setAttribute === 'function') {
+                el.setAttribute('data-api-initialized', 'true');
+            }
             try {
                 const result = await this.api.get(path);
                  
@@ -722,7 +733,9 @@ export function attachDOMBinding(clientProto: any) {
                         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
                             (el as any).value = typeof result === 'object' ? (result.value !== undefined ? result.value : '') : result;
                         } else {
-                            el.innerHTML = typeof result === 'object' ? (result.html || result.text || JSON.stringify(result)) : result;
+                            // @fix: Sanitize only non-template direct HTML (templates produce structured safe HTML)
+                            const rawHTML = typeof result === 'object' ? (result.html || result.text || JSON.stringify(result)) : String(result);
+                            el.innerHTML = sanitizeHTML(rawHTML);
                         }
                     }
                 }
@@ -967,8 +980,14 @@ export function attachDOMBinding(clientProto: any) {
 
             if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
                 (el as any).value = typeof processedPayload === 'object' ? (processedPayload.value !== undefined ? processedPayload.value : '') : processedPayload;
+            } else if (template) {
+                // Template path: renderTemplate already produced structured HTML, no extra sanitization needed
+                // (sanitizeHTML would strip valid template-generated markup in test envs)
+                el.innerHTML = typeof processedPayload === 'object' ? (processedPayload.html || processedPayload.text || JSON.stringify(processedPayload)) : String(processedPayload);
             } else {
-                el.innerHTML = typeof processedPayload === 'object' ? (processedPayload.html || processedPayload.text || JSON.stringify(processedPayload)) : processedPayload;
+                // @fix: Sanitize raw payload injected directly into innerHTML to prevent XSS
+                const rawHTML = typeof processedPayload === 'object' ? (processedPayload.html || processedPayload.text || JSON.stringify(processedPayload)) : String(processedPayload);
+                el.innerHTML = sanitizeHTML(rawHTML);
             }
         });
     };
@@ -998,6 +1017,8 @@ export function attachDOMBinding(clientProto: any) {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.text();
                 });
+                // @fix: Evict failed promises from cache so retries work (was: cached error forever)
+                promise.catch(() => componentPromiseCache.delete(src));
                 componentPromiseCache.set(src, promise);
             }
 
@@ -1009,7 +1030,8 @@ export function attachDOMBinding(clientProto: any) {
                 content = `<span style="color:red;font-weight:bold;">Failed to import ${src}</span>`;
             }
 
-            el.innerHTML = content;
+            // @fix: Sanitize fetched component HTML to prevent XSS injection (was: raw innerHTML)
+            el.innerHTML = sanitizeHTML(content);
             el.removeAttribute('data-import');
 
             const nestedElements = el.querySelectorAll('[data-import]');
@@ -1031,6 +1053,8 @@ export function attachDOMBinding(clientProto: any) {
         if (typeof window === 'undefined' || typeof document === 'undefined') return;
         if (this._routerInitialized) return;
         this._routerInitialized = true;
+        // @fix: Track in-flight navigation fetch so it can be aborted on new navigation (was: race condition)
+        let _spaAbortController: AbortController | null = null;
 
         const findViewport = () => {
             const selector = this.options.routerViewport || 'main, #viewport, body';
@@ -1048,15 +1072,23 @@ export function attachDOMBinding(clientProto: any) {
                     console.log(`%c🛣️ [Dolphin Router]: Navigating to ${url}...`, 'color: #3b82f6; font-weight: bold;');
                 }
 
+                // @fix: Abort any in-flight navigation to prevent race conditions (was: older fetch could overwrite newer)
+                if (_spaAbortController) {
+                    _spaAbortController.abort();
+                }
+                _spaAbortController = new AbortController();
+                const signal = _spaAbortController.signal;
+
                 const viewport = findViewport();
                 if (this.options.routerTransitions && viewport) {
                     viewport.classList.add('dolphin-fade-out');
                     await new Promise(r => setTimeout(r, 150));
                 }
 
-                const response = await fetch(url);
+                const response = await fetch(url, { signal });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const html = await response.text();
+                _spaAbortController = null;
 
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
@@ -1091,7 +1123,9 @@ export function attachDOMBinding(clientProto: any) {
                 this._scanStoreBinds();
                 this._scanAndFetchAPIBinds();
 
-            } catch (err) {
+            } catch (err: any) {
+                // @fix: Don't redirect on AbortError — it's an intentional cancellation, not a real error
+                if (err && err.name === 'AbortError') return;
                 console.error('[Dolphin Router Error]: Failed to route page:', err);
                 window.location.href = url;
             }

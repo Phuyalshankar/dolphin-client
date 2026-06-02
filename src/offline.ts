@@ -85,6 +85,11 @@ export class DolphinOffline {
         const store = transaction.objectStore('cache');
         store.put({ data, timestamp: Date.now() }, key);
         transaction.oncomplete = () => resolve();
+        // @fix: Handle write errors so callers aren't silently misled (was: no error handler)
+        transaction.onerror = () => {
+          console.warn('[Dolphin Offline] setCache write failed for key:', key);
+          resolve();
+        };
       } catch {
         resolve();
       }
@@ -110,6 +115,13 @@ export class DolphinOffline {
         const store = transaction.objectStore('mutations');
         store.add(mutation);
         transaction.oncomplete = () => resolve();
+        // @fix: Handle write errors explicitly (was: no error handler, mutation silently lost)
+        transaction.onerror = () => {
+          console.warn('[Dolphin Offline] queueMutation write failed:', method, path);
+          // Fallback to memory queue so mutation is not completely lost
+          this.memoryMutations.push(mutation);
+          resolve();
+        };
       } catch {
         resolve();
       }
@@ -144,6 +156,11 @@ export class DolphinOffline {
         const store = transaction.objectStore('mutations');
         store.delete(id);
         transaction.oncomplete = () => resolve();
+        // @fix: Log error but still resolve so sync loop isn't permanently blocked
+        transaction.onerror = () => {
+          console.warn('[Dolphin Offline] removeMutation failed for id:', id);
+          resolve();
+        };
       } catch {
         resolve();
       }

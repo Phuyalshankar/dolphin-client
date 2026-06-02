@@ -18,6 +18,8 @@ export class DolphinClient {
     fileHandlers: Set<any>;
     _offlineQueue: string[];
     reconnectAttempts: number;
+    /** @fix: Store timer ID so disconnect() can cancel pending reconnects (was: memory/logic leak) */
+    _reconnectTimer: ReturnType<typeof setTimeout> | null;
     _attachedListeners: { target: any; event: string; cb: any }[];
 
     constructor(url = '', deviceId = '', options = {}) {
@@ -30,7 +32,13 @@ export class DolphinClient {
 
         this.host    = (url || 'localhost').replace(/\/$/, '').replace(/^https?:\/\//, '');
         this.httpUrl = `${protocol}//${this.host}`;
-        this.deviceId = deviceId || 'web_' + Math.random().toString(36).substr(2, 8);
+
+        // @fix: Use crypto.randomUUID() for collision-resistant, non-deprecated ID generation
+        this.deviceId = deviceId || (
+            typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+                ? 'web_' + (crypto as any).randomUUID().replace(/-/g, '').slice(0, 8)
+                : 'web_' + Math.random().toString(36).slice(2, 10)
+        );
 
         /** @type {DolphinClientOptions} */
         this.options = {
@@ -74,6 +82,7 @@ export class DolphinClient {
         this._offlineQueue  = [];
 
         this.reconnectAttempts = 0;
+        this._reconnectTimer   = null;
         this._attachedListeners = [];
 
         // Initialize DOM bindings automatically if running in browser
@@ -119,6 +128,14 @@ export class DolphinClient {
 
     /** Connect to the Dolphin realtime server */
     async connect() {
+        // @fix: Guard against duplicate sockets — skip if already OPEN or CONNECTING (was: socket leak)
+        if (this.socket && (
+            this.socket.readyState === WebSocket.OPEN ||
+            this.socket.readyState === WebSocket.CONNECTING
+        )) {
+            return Promise.resolve();
+        }
+
         return new Promise<void>((resolve, reject) => {
             const protocol = this.httpUrl.startsWith('https') ? 'wss:' : 'ws:';
             const wsUrl    = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
@@ -146,10 +163,19 @@ export class DolphinClient {
 
     /** Disconnect cleanly */
     disconnect() {
+        // @fix: Cancel any pending reconnect timer before closing (was: timer continued after disconnect)
+        if (this._reconnectTimer !== null) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         if (this.socket) {
             this.socket.onclose = null; // prevent auto-reconnect
             this.socket.close();
             this.socket = null;
+        }
+        // @fix: Cleanup collab cursor elements and stale timers on disconnect
+        if (typeof (this as any)._collabCleanup === 'function') {
+            (this as any)._collabCleanup();
         }
         this.cleanupDomListeners();
     }
@@ -254,7 +280,11 @@ export class DolphinClient {
             this.reconnectAttempts++;
             const delay = Math.pow(2, this.reconnectAttempts) * 1000;
             console.log(`[Dolphin] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})...`);
-            setTimeout(() => this.connect().catch(() => {}), delay);
+            // @fix: Store timer ID so disconnect() can cancel it (was: timer fired after explicit disconnect)
+            this._reconnectTimer = setTimeout(() => {
+                this._reconnectTimer = null;
+                this.connect().catch(() => {});
+            }, delay);
         } else {
             console.error('[Dolphin] Max reconnect attempts reached.');
         }
@@ -328,14 +358,14 @@ export class DolphinClient {
      * @param {function(number): void} [onProgress]  — progress callback (0-100)
      * @returns {Promise<void>}
      */
-    async pubFile(fileId, fileData, filename = '', onProgress) {
+    async pubFile(fileId, fileData, filename = '', onProgress?) {
         let buffer;
         if (fileData instanceof Blob) {
             buffer = await fileData.arrayBuffer();
         } else if (fileData instanceof ArrayBuffer) {
             buffer = fileData;
         } else {
-            buffer = fileData.buffer || fileData;
+            buffer = (fileData as any).buffer || fileData;
         }
 
         const bytes      = new Uint8Array(buffer);

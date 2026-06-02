@@ -266,7 +266,10 @@ export class APIHandler {
         if (['PUT', 'PATCH', 'DELETE'].includes(finalMethod)) {
             if (this.client.options.methodSpoofing || options.methodSpoofing) {
                 headers['X-HTTP-Method-Override'] = finalMethod;
-                if (finalBody && typeof finalBody === 'object') {
+                if (finalBody instanceof FormData) {
+                    // @fix: FormData cannot be spread into a plain object — use append() instead (was: spread produced {})
+                    finalBody.append('_method', finalMethod);
+                } else if (finalBody && typeof finalBody === 'object') {
                     finalBody = {
                         ...finalBody,
                         _method: finalMethod

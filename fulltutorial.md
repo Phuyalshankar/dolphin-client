@@ -825,4 +825,145 @@ When navigating, Dolphin applies a fading animation by adding `.dolphin-fade-out
 
 ---
 
+## १८. Direct React Integration & DolphinStore API (React र DolphinStore एपीआई एकीकरण)
+
+Dolphin Client मा भएको **DolphinStore** ले तपाईँलाई क्लाइन्ट-साइड स्टेट र ब्याकइन्ड डेटा कलेक्सनहरू (GET API र real-time WebSocket Syncing) सजिलै व्यवस्थापन गर्न दिन्छ। यसलाई तपाईँले म्यानुअल जाभास्क्रिप्ट कोड वा **React** सँग सजिलै जोड्न सक्नुहुन्छ।
+
+---
+
+### १८.१. DolphinStore JS API
+जब तपाईँ `DolphinClient` इन्स्टन्स सिर्जना गर्नुहुन्छ, `dolphin.store` स्वतः उपलब्ध हुन्छ। कुनै पनि कलेक्सन प्रोपर्टी (जस्तै `store.devices` वा `store.orders`) पहिलो पटक एक्सेस गर्दा, यसले:
+1. **स्वचालित HTTP Fetch**: `/devices` वा `/orders` मा `GET` रिक्वेस्ट पठाउँछ।
+2. **स्वचालित WebSocket Sync**: `db:sync/devices` च्यानलमा स्वतः सब्सक्राइब गर्छ र ब्याकइन्डमा कुनै आइटम `create`, `update`, वा `delete` हुँदा कलेक्सन डेटा रियल-टाइम अपडेट गर्छ।
+
+#### क) डेटा फिल्टरिङ र सर्टिङ (Filtering & Sorting)
+तपाईँले स्टोर कलेक्सनहरूमा `.where(filterFn)` र `.orderBy(key, direction)` प्रयोग गरेर इन-मेमोरी फिल्टर र सर्ट गर्न सक्नुहुन्छ:
+
+```javascript
+const orders = dolphin.store.orders;
+
+// active र total 50 भन्दा बढी भएका अर्डरहरू फिल्टर गरी मूल्यअनुसार सर्ट गर्ने
+const highValueOrders = orders
+  .where(o => o.status === 'active' && o.total > 50)
+  .orderBy('price', 'desc');
+
+console.log("Filtered orders:", highValueOrders.items);
+```
+
+#### ख) म्यानुअल सब्सक्राइब (Manual Subscription & Snapshot)
+```javascript
+// १. स्टोरमा आउने जुनसुकै अपडेट सुन्न सब्सक्राइब गर्ने
+const unsubscribe = dolphin.store.subscribe(() => {
+  const currentOrders = dolphin.store.getSnapshot('orders');
+  console.log("Store Updated! Orders:", currentOrders.items);
+});
+
+// २. काम सकिएपछि अनसबस्क्राइब गर्ने
+unsubscribe();
+```
+
+---
+
+### १८.२. Hookless React Integration (क्लास कम्पोनेन्टमा प्रयोग)
+यदि तपाईँ React मा कुनै पनि state hooks (`useState`, `useEffect`) प्रयोग नगरी Dolphin Store सँग सिधै रियल-टाइम डेटा बाइन्ड गर्न चाहनुहुन्छ भने, **React Class Components** सबैभन्दा उत्तम विकल्प हो। यसले React लाई विशुद्ध रूपमा रेन्डरिङ इन्जिन मात्र बनाउँछ:
+
+```jsx
+import React from 'react';
+
+class OrderDashboard extends React.Component {
+  constructor(props) {
+    super(props);
+    // १. initial store snapshot स्टेटमा राख्ने
+    this.state = {
+      orders: window.dolphin.store.getSnapshot('orders')
+    };
+  }
+
+  componentDidMount() {
+    // २. स्टोर अपडेट हुँदा लोकल स्टेट अपडेट गर्न सब्सक्राइब गर्ने
+    this.unsubscribe = window.dolphin.store.subscribe(() => {
+      this.setState({
+        orders: window.dolphin.store.getSnapshot('orders')
+      });
+    });
+  }
+
+  componentWillUnmount() {
+    // ३. कम्पोनेन्ट अनमाउन्ट हुँदा अनसबस्क्राइब गर्ने
+    if (this.unsubscribe) this.unsubscribe();
+  }
+
+  render() {
+    const { items, loading, error } = this.state.orders;
+
+    if (loading) return <div>लोड हुँदैछ...</div>;
+    if (error) return <div>त्रुटि: {error}</div>;
+
+    return (
+      <div className="orders-list">
+        <h2>रियल-टाइम अर्डरहरू ({items.length})</h2>
+        {items.map(order => (
+          <div key={order.id} className="order-item">
+            <span>अर्डर #{order.id}</span> - <span>रू. {order.amount}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+}
+
+export default OrderDashboard;
+```
+
+---
+
+### १८.३. React Hook Integration using `useSyncExternalStore` (हूक कम्पोनेन्टमा प्रयोग)
+यदि तपाईँ React 18+ को functional components प्रयोग गर्दै हुनुहुन्छ भने, React को आधिकारिक **`useSyncExternalStore`** API को प्रयोग गरेर Dolphin Store लाई विना कुनै अनावश्यक re-render वा state synchronization झन्झट सिधै हूकमा एकीकृत गर्न सक्नुहुन्छ:
+
+```jsx
+import { useSyncExternalStore } from 'react';
+
+// custom react hook सिर्जना गर्ने
+function useDolphinCollection(collectionName) {
+  const store = window.dolphin.store;
+  
+  // १. external store subscribe गर्ने तरिका
+  const subscribe = (onStoreChange) => store.subscribe(onStoreChange);
+  
+  // २. snapshot लिनको लागि getSnapshot
+  const getSnapshot = () => store.getSnapshot(collectionName);
+  
+  // React ले यो स्टोर अपडेट हुँदा स्वतः कम्पोनेन्टलाई re-render गराउँछ
+  return useSyncExternalStore(subscribe, getSnapshot);
+}
+
+// React component मा प्रयोग गर्दा:
+export function UsersList() {
+  const { items, loading, error } = useDolphinCollection('users');
+
+  if (loading) return <p>लोड हुँदैछ...</p>;
+  if (error) return <p>त्रुटि भयो: {error}</p>;
+
+  return (
+    <ul>
+      {items.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+### १८.४. Prevent Resource Leaks with `destroy()`
+जब तपाईँको सिंगल पेज वा स्टोर अब प्रयोगमा आउँदैन (जस्तै SPA navigation वा HMR/Hot Reloading को समयमा), स्टोरलाई पूर्ण रूपमा नष्ट गर्न `dolphin.store.destroy()` कल गर्नु आवश्यक हुन्छ। यसले सबै एक्टिभ WebSocket subscriptions र listeners हटाई मेमोरी लिक हुनबाट जोगाउँछ:
+
+```javascript
+// clean up dolphin store
+dolphin.store.destroy();
+```
+
+---
+
 Enjoy building hookless, lightning-fast, and premium real-time applications with **Dolphin Client**! 🐬
