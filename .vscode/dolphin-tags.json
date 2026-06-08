@@ -1,0 +1,594 @@
+{
+  "version": 1.1,
+  "tags": [
+    {
+      "name": "dolphin-accordion",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-avatar",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-checkbox",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-tabs",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-login",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-register",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-form-floating",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-form-standard",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-table",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-toast",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-store",
+      "description": "Declarative UI Store Initialization Component (Seeds state via attributes or JSON text content)"
+    },
+    {
+      "name": "dolphin-modal",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-button",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-card",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-navbar",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-alert",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-badge",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-header",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-footer",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-grid",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-dashboard",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-switch",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-tooltip",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-slider",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-dropdown",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-popover",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-skeleton",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-progress",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-theme-bar",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-drawer",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-breadcrumbs",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-pagination",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-steps",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-hero",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-pricing",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-carousel",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-timeline",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-dropzone",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-chat",
+      "description": "Dolphin CLI Component"
+    },
+    {
+      "name": "dolphin-rating",
+      "description": "Dolphin CLI Component"
+    }
+  ],
+  "globalAttributes": [
+    {
+      "name": "class",
+      "valueSet": "dolphin-classes"
+    },
+    {
+      "name": "className",
+      "valueSet": "dolphin-classes"
+    },
+    {
+      "name": "data-import",
+      "description": "Imports an HTML fragment recursively from the specified relative path or URL."
+    },
+    {
+      "name": "data-api-get",
+      "description": "Performs a GET request to the specified API URL and renders it."
+    },
+    {
+      "name": "data-rt-template",
+      "description": "Specifies the CSS selector of the template to use (e.g., #product)."
+    },
+    {
+      "name": "data-rt-bind",
+      "description": "Binds the HTML content or properties to a specific state or API response."
+    },
+    {
+      "name": "data-store-write",
+      "description": "Binds input changes to write to the specified store state (e.g., store.property)."
+    },
+    {
+      "name": "data-store-read",
+      "description": "Binds element to read/display state from the specified store state (e.g., store.property)."
+    },
+    {
+      "name": "data-rt-validate",
+      "description": "Specifies validation rules for the input (e.g., required, email)."
+    },
+    {
+      "name": "data-api-submit",
+      "description": "Submits form data to the specified API URL (e.g., POST /api/submit)."
+    },
+    {
+      "name": "data-api-result",
+      "description": "Saves the API submission result to the specified state path."
+    },
+    {
+      "name": "data-api-redirect",
+      "description": "URL to redirect the user to after a successful API submission."
+    },
+    {
+      "name": "data-api-reload",
+      "description": "Reloads the page after a successful API submission."
+    },
+    {
+      "name": "data-rt-type",
+      "description": "Specifies the rendering type, such as 'context'."
+    },
+    {
+      "name": "data-rt-payload",
+      "description": "Payload JSON string to pass with events (e.g., '{{id}}')."
+    },
+    {
+      "name": "data-api-payload",
+      "description": "Payload JSON string to send with API events."
+    },
+    {
+      "name": "data-rt-debounce",
+      "description": "Time in milliseconds to debounce inputs before triggering an action."
+    },
+    {
+      "name": "data-rt-click",
+      "description": "Publishes a custom Dolphin event on click."
+    },
+    {
+      "name": "data-rt-change",
+      "description": "Publishes a custom Dolphin event on change."
+    },
+    {
+      "name": "data-rt-submit",
+      "description": "Publishes a custom Dolphin event on form submit."
+    },
+    {
+      "name": "data-rt-input",
+      "description": "Publishes a custom Dolphin event on input."
+    },
+    {
+      "name": "data-rt-keydown",
+      "description": "Publishes a custom Dolphin event on keydown."
+    },
+    {
+      "name": "data-rt-keyup",
+      "description": "Publishes a custom Dolphin event on keyup."
+    },
+    {
+      "name": "data-rt-dblclick",
+      "description": "Publishes a custom Dolphin event on double click."
+    },
+    {
+      "name": "data-rt-focus",
+      "description": "Publishes a custom Dolphin event on focus."
+    },
+    {
+      "name": "data-rt-blur",
+      "description": "Publishes a custom Dolphin event on blur."
+    },
+    {
+      "name": "data-rt-mouseenter",
+      "description": "Publishes a custom Dolphin event on mouse enter."
+    },
+    {
+      "name": "data-rt-mouseleave",
+      "description": "Publishes a custom Dolphin event on mouse leave."
+    },
+    {
+      "name": "data-api-click",
+      "description": "Performs an API request on click (e.g., POST /api/like)."
+    },
+    {
+      "name": "data-api-change",
+      "description": "Performs an API request on change."
+    },
+    {
+      "name": "data-api-input",
+      "description": "Performs an API request on input."
+    },
+    {
+      "name": "data-api-keydown",
+      "description": "Performs an API request on keydown."
+    },
+    {
+      "name": "data-api-keyup",
+      "description": "Performs an API request on keyup."
+    },
+    {
+      "name": "data-api-dblclick",
+      "description": "Performs an API request on double click."
+    },
+    {
+      "name": "data-api-focus",
+      "description": "Performs an API request on focus."
+    },
+    {
+      "name": "data-api-blur",
+      "description": "Performs an API request on blur."
+    },
+    {
+      "name": "data-api-mouseenter",
+      "description": "Performs an API request on mouse enter."
+    },
+    {
+      "name": "data-api-mouseleave",
+      "description": "Performs an API request on mouse leave."
+    },
+    {
+      "name": "data-store-click",
+      "description": "Runs a Dolphin store action expression on click (e.g., app.count++)."
+    },
+    {
+      "name": "data-store-change",
+      "description": "Runs a Dolphin store action expression on change."
+    },
+    {
+      "name": "data-store-submit",
+      "description": "Runs a Dolphin store action expression on submit."
+    },
+    {
+      "name": "data-store-input",
+      "description": "Runs a Dolphin store action expression on input."
+    },
+    {
+      "name": "data-store-keydown",
+      "description": "Runs a Dolphin store action expression on keydown."
+    },
+    {
+      "name": "data-store-keyup",
+      "description": "Runs a Dolphin store action expression on keyup."
+    },
+    {
+      "name": "data-store-dblclick",
+      "description": "Runs a Dolphin store action expression on double click."
+    },
+    {
+      "name": "data-store-focus",
+      "description": "Runs a Dolphin store action expression on focus."
+    },
+    {
+      "name": "data-store-blur",
+      "description": "Runs a Dolphin store action expression on blur."
+    },
+    {
+      "name": "data-store-mouseenter",
+      "description": "Runs a Dolphin store action expression on mouse enter."
+    },
+    {
+      "name": "data-store-mouseleave",
+      "description": "Runs a Dolphin store action expression on mouse leave."
+    },
+    {
+      "name": "data-rt-text",
+      "description": "Binds text content to a property in the closest rendering context."
+    },
+    {
+      "name": "data-rt-html",
+      "description": "Binds HTML content to a property in the closest rendering context."
+    },
+    {
+      "name": "data-rt-attr",
+      "description": "Binds attributes dynamically (e.g., src:imageUrl, href:linkUrl)."
+    },
+    {
+      "name": "data-rt-class",
+      "description": "Binds CSS classes conditionally (e.g., active:isActive)."
+    },
+    {
+      "name": "data-rt-if",
+      "description": "Shows the element only if the specified context property is truthy."
+    },
+    {
+      "name": "data-rt-hide",
+      "description": "Hides the element if the specified context property is truthy."
+    },
+    {
+      "name": "data-rt-filter",
+      "description": "Filters the rendered data array (e.g., status==completed)."
+    },
+    {
+      "name": "data-rt-search",
+      "description": "Searches the rendered data array (e.g., title==searchQuery)."
+    },
+    {
+      "name": "data-rt-sort",
+      "description": "Sorts the rendered data array (e.g., price.asc or popular)."
+    },
+    {
+      "name": "data-api-toast",
+      "description": "Inline success message to show as toast after a successful API request."
+    },
+    {
+      "name": "data-api-error-toast",
+      "description": "Inline error message to show as toast after a failed API request."
+    },
+    {
+      "name": "data-rt-api-success",
+      "description": "ID of a hidden element whose text content is shown as a success toast after a successful API request. Example: data-rt-api-success=\"my-success-msg\""
+    },
+    {
+      "name": "data-rt-api-error",
+      "description": "ID of a hidden element whose text content is shown as an error toast after a failed API request. Example: data-rt-api-error=\"my-error-msg\""
+    },
+    {
+      "name": "data-rt-api-success-show",
+      "description": "ID of an inline alert element to reveal (remove hidden) on API success. Pair with data-rt-alert-duration for auto-hide. Example: data-rt-api-success-show=\"success-alert\""
+    },
+    {
+      "name": "data-rt-api-error-show",
+      "description": "ID of an inline alert element to reveal (remove hidden) on API error. Pair with data-rt-alert-duration for auto-hide. Example: data-rt-api-error-show=\"error-alert\""
+    },
+    {
+      "name": "data-rt-alert-duration",
+      "description": "Duration in milliseconds before the inline alert auto-hides. Use with data-rt-api-success-show or data-rt-api-error-show. Example: data-rt-alert-duration=\"3000\""
+    }
+  ],
+  "valueSets": [
+    {
+      "name": "dolphin-classes",
+      "values": [
+        {
+          "name": "dolphin-accordion",
+          "description": "Dolphin CLI Component (dolphin-accordion.html)"
+        },
+        {
+          "name": "dolphin-avatar",
+          "description": "Dolphin CLI Component (dolphin-avatar.html)"
+        },
+        {
+          "name": "dolphin-checkbox",
+          "description": "Dolphin CLI Component (dolphin-checkbox.html)"
+        },
+        {
+          "name": "dolphin-tabs",
+          "description": "Dolphin CLI Component (dolphin-tabs.html)"
+        },
+        {
+          "name": "dolphin-login",
+          "description": "Dolphin CLI Component (dolphin-login.html)"
+        },
+        {
+          "name": "dolphin-register",
+          "description": "Dolphin CLI Component (dolphin-register.html)"
+        },
+        {
+          "name": "dolphin-form-floating",
+          "description": "Dolphin CLI Component (dolphin-form-floating.html)"
+        },
+        {
+          "name": "dolphin-form-standard",
+          "description": "Dolphin CLI Component (dolphin-form-standard.html)"
+        },
+        {
+          "name": "dolphin-table",
+          "description": "Dolphin CLI Component (dolphin-table.html)"
+        },
+        {
+          "name": "dolphin-toast",
+          "description": "Dolphin CLI Component (dolphin-toast.html)"
+        },
+        {
+          "name": "dolphin-store",
+          "description": "Declarative UI Store Component"
+        },
+        {
+          "name": "dolphin-modal",
+          "description": "Dolphin CLI Component (dolphin-modal.html)"
+        },
+        {
+          "name": "dolphin-button",
+          "description": "Dolphin CLI Component (dolphin-button.html)"
+        },
+        {
+          "name": "dolphin-card",
+          "description": "Dolphin CLI Component (dolphin-card.html)"
+        },
+        {
+          "name": "dolphin-navbar",
+          "description": "Dolphin CLI Component (dolphin-navbar.html)"
+        },
+        {
+          "name": "dolphin-alert",
+          "description": "Dolphin CLI Component (dolphin-alert.html)"
+        },
+        {
+          "name": "dolphin-badge",
+          "description": "Dolphin CLI Component (dolphin-badge.html)"
+        },
+        {
+          "name": "dolphin-header",
+          "description": "Dolphin CLI Component (dolphin-header.html)"
+        },
+        {
+          "name": "dolphin-footer",
+          "description": "Dolphin CLI Component (dolphin-footer.html)"
+        },
+        {
+          "name": "dolphin-grid",
+          "description": "Dolphin CLI Component (dolphin-grid.html)"
+        },
+        {
+          "name": "dolphin-dashboard",
+          "description": "Dolphin CLI Component (dolphin-dashboard.html)"
+        },
+        {
+          "name": "dolphin-switch",
+          "description": "Dolphin CLI Component (dolphin-switch.html)"
+        },
+        {
+          "name": "dolphin-tooltip",
+          "description": "Dolphin CLI Component (dolphin-tooltip.html)"
+        },
+        {
+          "name": "dolphin-slider",
+          "description": "Dolphin CLI Component (dolphin-slider.html)"
+        },
+        {
+          "name": "dolphin-dropdown",
+          "description": "Dolphin CLI Component (dolphin-dropdown.html)"
+        },
+        {
+          "name": "dolphin-popover",
+          "description": "Dolphin CLI Component (dolphin-popover.html)"
+        },
+        {
+          "name": "dolphin-skeleton",
+          "description": "Dolphin CLI Component (dolphin-skeleton.html)"
+        },
+        {
+          "name": "dolphin-progress",
+          "description": "Dolphin CLI Component (dolphin-progress.html)"
+        },
+        {
+          "name": "dolphin-theme-bar",
+          "description": "Dolphin CLI Component (dolphin-theme-bar.html)"
+        },
+        {
+          "name": "dolphin-drawer",
+          "description": "Dolphin CLI Component (dolphin-drawer.html)"
+        },
+        {
+          "name": "dolphin-breadcrumbs",
+          "description": "Dolphin CLI Component (dolphin-breadcrumbs.html)"
+        },
+        {
+          "name": "dolphin-pagination",
+          "description": "Dolphin CLI Component (dolphin-pagination.html)"
+        },
+        {
+          "name": "dolphin-steps",
+          "description": "Dolphin CLI Component (dolphin-steps.html)"
+        },
+        {
+          "name": "dolphin-hero",
+          "description": "Dolphin CLI Component (dolphin-hero.html)"
+        },
+        {
+          "name": "dolphin-pricing",
+          "description": "Dolphin CLI Component (dolphin-pricing.html)"
+        },
+        {
+          "name": "dolphin-carousel",
+          "description": "Dolphin CLI Component (dolphin-carousel.html)"
+        },
+        {
+          "name": "dolphin-timeline",
+          "description": "Dolphin CLI Component (dolphin-timeline.html)"
+        },
+        {
+          "name": "dolphin-dropzone",
+          "description": "Dolphin CLI Component (dolphin-dropzone.html)"
+        },
+        {
+          "name": "dolphin-chat",
+          "description": "Dolphin CLI Component (dolphin-chat.html)"
+        },
+        {
+          "name": "dolphin-rating",
+          "description": "Dolphin CLI Component (dolphin-rating.html)"
+        }
+      ]
+    }
+  ]
+}

@@ -108,6 +108,19 @@ class MockElement {
     return child;
   }
 
+  insertBefore(newChild: MockElement, refChild: MockElement | null) {
+    newChild.parentNode = this;
+    if (refChild) {
+      const idx = this.childNodes.indexOf(refChild);
+      if (idx !== -1) {
+        this.childNodes.splice(idx, 0, newChild);
+        return newChild;
+      }
+    }
+    this.childNodes.push(newChild);
+    return newChild;
+  }
+
   removeChild(child: MockElement) {
     const idx = this.childNodes.indexOf(child);
     if (idx !== -1) {
@@ -459,4 +472,256 @@ describe('v2.0 Advanced Integrated Capabilities', () => {
     expect(out4).toContain('Premium');
     expect(out4).not.toContain('Upgrade');
   });
+
+  test('Fast-path template rendering (no block blocks) correctly resolves nested object properties like rating.rate', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-template', 'ID: {{id}}, Title: {{title}}, Rating: {{rating.rate}}, Count: {{rating?.count}}');
+    docElements.push(el);
+
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    c._updateDOM('products/current', {
+      id: 42,
+      title: 'Dolphin Figurine',
+      rating: {
+        rate: 4.8,
+        count: 150
+      }
+    });
+
+    expect(el.innerHTML).toBe('ID: 42, Title: Dolphin Figurine, Rating: 4.8, Count: 150');
+  });
+
+  test('Store actions correctly resolve local context variables', () => {
+    const parentEl = new MockElement('DIV') as any;
+    parentEl._rtContext = { id: 42, title: 'Dolphin' };
+    
+    const childEl = new MockElement('BUTTON') as any;
+    childEl.parentNode = parentEl;
+    
+    c.uiStores = new Map();
+    c._executeStoreAction('app.editId = id; app.editTitle = title;', childEl);
+    
+    expect(c.getStoreState('app', 'editId')).toBe(42);
+    expect(c.getStoreState('app', 'editTitle')).toBe('Dolphin');
+  });
+
+  test('data-rt-text evaluates complex expressions with context', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-bind', 'store/app');
+    el.setAttribute('data-rt-type', 'context');
+
+    const textEl = new MockElement('SPAN');
+    textEl.setAttribute('data-rt-text', "editId ? 'Edit Product' : 'Add New Product'");
+    el.appendChild(textEl);
+
+    // Mock document.querySelectorAll to return textEl when querying inside el
+    el.querySelectorAll = jest.fn().mockReturnValue([textEl]);
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === '[data-rt-bind="store/app"]') return [el];
+      return [];
+    });
+
+    c._updateDOM('store/app', { editId: null });
+    expect(textEl.textContent).toBe('Add New Product');
+
+    c._updateDOM('store/app', { editId: 42 });
+    expect(textEl.textContent).toBe('Edit Product');
+  });
+
+  test('data-rt-attr evaluates complex expressions containing commas and colons in strings', () => {
+    const el = new MockElement('DIV');
+    el.setAttribute('data-rt-bind', 'store/app');
+    el.setAttribute('data-rt-type', 'context');
+
+    const formEl = new MockElement('FORM');
+    formEl.setAttribute('data-rt-attr', "data-api-submit: editId ? 'PUT https://api.com/products/' + editId : 'POST https://api.com/products', data-api-toast: editId ? 'Updated, yes!' : 'Created, hooray!'");
+    el.appendChild(formEl);
+
+    el.querySelectorAll = jest.fn().mockReturnValue([formEl]);
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === '[data-rt-bind="store/app"]') return [el];
+      return [];
+    });
+
+    c._updateDOM('store/app', { editId: null });
+    expect(formEl.getAttribute('data-api-submit')).toBe('POST https://api.com/products');
+    expect(formEl.getAttribute('data-api-toast')).toBe('Created, hooray!');
+
+    c._updateDOM('store/app', { editId: 77 });
+    expect(formEl.getAttribute('data-api-submit')).toBe('PUT https://api.com/products/77');
+    expect(formEl.getAttribute('data-api-toast')).toBe('Updated, yes!');
+  });
+
+  test('Store actions support log() helper for logging stores and variables', () => {
+    const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    
+    c.uiStores = new Map();
+    c.setStoreState('register', 'name', 'Ram');
+    c.setStoreState('app', 'isAdding', true);
+    
+    // Test 1: Log specific store
+    c._executeStoreAction('log(register);');
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('[Dolphin Store: register]'),
+      expect.any(String),
+      expect.objectContaining({ name: 'Ram' })
+    );
+    
+    // Test 2: Log all UI stores (when no argument is passed)
+    c._executeStoreAction('log();');
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('[Dolphin All UI Stores]'),
+      expect.any(String),
+      expect.objectContaining({
+        register: expect.objectContaining({ name: 'Ram' }),
+        app: expect.objectContaining({ isAdding: true })
+      })
+    );
+    
+    // Test 3: Log random variable/value
+    c._executeStoreAction('log("Hello World");');
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('[Dolphin Log]'),
+      expect.any(String),
+      'Hello World'
+    );
+    
+    spy.mockRestore();
+  });
+
+  test('dolphin-store parses attributes with type conversions and seeds store', () => {
+    const storeEl = new MockElement('dolphin-store') as any;
+    storeEl.setAttribute('name', 'settings');
+    storeEl.setAttribute('theme', 'dark');
+    storeEl.setAttribute('isModalOpen', 'false');
+    storeEl.setAttribute('total', '42');
+    storeEl.setAttribute('nullable', 'null');
+    // No child elements — seed-only mode
+    storeEl.childNodes = [];
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === 'dolphin-store') return [storeEl];
+      return [];
+    });
+
+    c.uiStores = new Map();
+    c._scanStoreBinds();
+
+    expect(c.getStoreState('settings', 'theme')).toBe('dark');
+    expect(c.getStoreState('settings', 'isModalOpen')).toBe(false);
+    expect(c.getStoreState('settings', 'total')).toBe(42);
+    expect(c.getStoreState('settings', 'nullable')).toBeNull();
+    // Seed-only mode: element should be hidden
+    expect(storeEl.style.display).toBe('none');
+  });
+
+  test('dolphin-store parses inline JSON content and seeds store', () => {
+    const storeEl = new MockElement('dolphin-store') as any;
+    storeEl.setAttribute('data-store', 'app');
+    // Set _textContent directly so childNodes stays empty (seed-only mode)
+    const jsonStr = JSON.stringify({
+      user: { name: 'Shankar' },
+      loggedIn: true,
+      count: 10
+    });
+    storeEl._textContent = jsonStr;
+    // Override textContent getter to return our JSON string directly
+    Object.defineProperty(storeEl, 'textContent', { get: () => jsonStr, configurable: true });
+    // No child elements — seed-only mode
+    storeEl.childNodes = [];
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === 'dolphin-store') return [storeEl];
+      return [];
+    });
+
+    c.uiStores = new Map();
+    c._scanStoreBinds();
+
+    expect(c.getStoreState('app', 'user')).toEqual({ name: 'Shankar' });
+    expect(c.getStoreState('app', 'loggedIn')).toBe(true);
+    expect(c.getStoreState('app', 'count')).toBe(10);
+    // Seed-only mode: element should be hidden
+    expect(storeEl.style.display).toBe('none');
+  });
+
+
+  test('dolphin-store with children acts as context container (dual-mode)', () => {
+    const childEl = new MockElement('SPAN') as any;
+    childEl.setAttribute('data-rt-text', 'username');
+
+    const storeEl = new MockElement('dolphin-store') as any;
+    storeEl.setAttribute('name', 'profile');
+    storeEl.setAttribute('username', 'Shankar');
+
+    // Has child elements — dual-mode (context container + store seeder)
+    storeEl.appendChild(childEl);
+
+    storeEl.querySelectorAll = jest.fn().mockReturnValue([childEl]);
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === 'dolphin-store') return [storeEl];
+      if (sel === '[data-rt-bind="store/profile"]') return [storeEl];
+      return [];
+    });
+
+    c.uiStores = new Map();
+    c._scanStoreBinds();
+
+    // Store should be seeded
+    expect(c.getStoreState('profile', 'username')).toBe('Shankar');
+    // Element should NOT be hidden (it has children to display)
+    expect(storeEl.style.display).not.toBe('none');
+    // Element should have data-rt-bind and data-rt-type set automatically
+    expect(storeEl.getAttribute('data-rt-bind')).toBe('store/profile');
+    expect(storeEl.getAttribute('data-rt-type')).toBe('context');
+    // Child should have text updated
+    expect(childEl.textContent).toBe('Shankar');
+  });
+
+  test('dolphin-store auto-wires template wrapper element and renders it', () => {
+    const storeEl = new MockElement('dolphin-store') as any;
+    storeEl.setAttribute('name', 'app');
+    storeEl.setAttribute('template', '#counter-ui');
+    storeEl.setAttribute('count', '5');
+    storeEl.childNodes = [];
+
+    const parentEl = new MockElement('DIV') as any;
+    parentEl.appendChild(storeEl);
+
+    const templateEl = new MockElement('template') as any;
+    templateEl.innerHTML = 'Count: {{count}}';
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === 'dolphin-store') return [storeEl];
+      if (sel === '[data-rt-bind="store/app"]') return parentEl.childNodes.filter((c: any) => c.getAttribute && c.getAttribute('data-rt-bind') === 'store/app');
+      return [];
+    });
+
+    (global as any).document.querySelector = jest.fn().mockImplementation((sel) => {
+      if (sel === '#counter-ui') return templateEl;
+      if (sel.startsWith('[data-ds-wired=')) return null;
+      return null;
+    });
+
+    c.uiStores = new Map();
+    c._scanStoreBinds();
+
+    // Store should be seeded
+    expect(c.getStoreState('app', 'count')).toBe(5);
+
+    // It should have injected a wrapper element
+    const siblings = parentEl.childNodes;
+    expect(siblings.length).toBe(2);
+    const wrapper = siblings[1];
+    expect(wrapper.tagName).toBe('DIV');
+    expect(wrapper.getAttribute('data-rt-bind')).toBe('store/app');
+    expect(wrapper.getAttribute('template')).toBeNull(); // Should be data-rt-template, not template
+    expect(wrapper.getAttribute('data-rt-template')).toBe('#counter-ui');
+    
+    // Check if the template rendered inside the wrapper
+    expect(wrapper.innerHTML).toContain('Count: 5');
+  });
 });
+

@@ -330,4 +330,28 @@ describe('Reactive Store & Declarative Validation', () => {
     expect(inputEmail.classList.add).toHaveBeenCalledWith('invalid');
     expect(c.publish).toHaveBeenCalledWith('errors/email', 'Please enter a valid email address');
   });
+
+  test('checkbox change event updates store and checked property', () => {
+    const addEventListenerMock = (global as any).document.addEventListener;
+    const changeHandlers: any[] = [];
+
+    addEventListenerMock.mockImplementation((event: string, handler: any) => {
+      if (event === 'change') changeHandlers.push(handler);
+    });
+
+    c._initDOMBinding();
+
+    const checkboxEl = new MockElement('INPUT');
+    checkboxEl.setAttribute('data-store-write', 'register.check');
+    checkboxEl.setAttribute('data-store-read', 'register.check');
+    checkboxEl.type = 'checkbox';
+    checkboxEl.checked = true; // browser toggles it on click before change event
+    docElements.push(checkboxEl);
+
+    // Simulate change event
+    changeHandlers.forEach(handler => handler({ target: checkboxEl }));
+
+    expect(c.getStoreState('register', 'check')).toBe(true);
+    expect(checkboxEl.checked).toBe(true);
+  });
 });

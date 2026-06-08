@@ -152,6 +152,46 @@ describe('DolphinClient — Component Imports & SPA Routing', () => {
             // The inner element should have a circular import warning and stop resolving
             expect(nestedChild.innerHTML).toContain('Circular import');
         });
+
+        test('resolves selector-based component imports using url#id selector', async () => {
+            const mockEl = {
+                getAttribute: (name: string) => {
+                    if (name === 'data-import') return 'components.html#header';
+                    return null;
+                },
+                removeAttribute: jest.fn(),
+                querySelectorAll: jest.fn().mockReturnValue([]),
+                innerHTML: '',
+            };
+
+            ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([mockEl]);
+
+            // Mock fetch to return the full HTML containing multiple components
+            (global as any).fetch = jest.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                text: async () => '<div><header id="header">Header Content</header><footer id="footer">Footer Content</footer></div>',
+            });
+
+            // Mock DOMParser to parse and return only the targeted selector
+            const mockHeaderEl = { outerHTML: '<header id="header">Header Content</header>' };
+            (global as any).DOMParser = class {
+                parseFromString() {
+                    return {
+                        querySelector: (selector: string) => {
+                            if (selector === '#header') return mockHeaderEl;
+                            return null;
+                        }
+                    };
+                }
+            };
+
+            await client._resolveImports();
+
+            expect(mockEl.innerHTML).toBe('<header id="header">Header Content</header>');
+            expect(mockEl.removeAttribute).toHaveBeenCalledWith('data-import');
+            expect((global as any).fetch).toHaveBeenCalledWith('components.html');
+        });
     });
 
     // ─────────────────────────────────────────────────────────────────────────────

@@ -1,3 +1,31 @@
+// Helper to create mock functions safely without throwing ReferenceError when Jest is not present.
+function createMockFn(): any {
+  if (typeof jest !== 'undefined' && typeof jest.fn === 'function') {
+    return jest.fn();
+  }
+  const fn: any = (...args: any[]) => {
+    fn.mock.calls.push(args);
+    if (fn._implementation) {
+      return fn._implementation(...args);
+    }
+    return fn._returnValue;
+  };
+  fn.mock = {
+    calls: []
+  };
+  fn._returnValue = undefined;
+  fn._implementation = null;
+  fn.mockReturnValue = (val: any) => {
+    fn._returnValue = val;
+    return fn;
+  };
+  fn.mockImplementation = (impl: any) => {
+    fn._implementation = impl;
+    return fn;
+  };
+  return fn;
+}
+
 export class DolphinTestUtils {
   static render(html: string): { container: any; find: (sel: string) => any; fireEvent: (el: any, eventType: string) => void } {
     if (typeof document === 'undefined') {
@@ -25,11 +53,11 @@ export class DolphinTestUtils {
       send: (data: string) => {
         sentMessages.push(data);
       },
-      close: jest.fn(),
-      onopen: jest.fn(),
-      onmessage: jest.fn(),
-      onclose: jest.fn(),
-      onerror: jest.fn(),
+      close: createMockFn(),
+      onopen: createMockFn(),
+      onmessage: createMockFn(),
+      onclose: createMockFn(),
+      onerror: createMockFn(),
       sentMessages
     };
 
@@ -55,8 +83,8 @@ export class DolphinTestUtils {
   static simulateClick(el: any) {
     const clickEvt = {
       target: el,
-      preventDefault: jest.fn(),
-      stopPropagation: jest.fn()
+      preventDefault: createMockFn(),
+      stopPropagation: createMockFn()
     };
     // Trigger all document click listeners manually in Node or standard browser dispatcher
     const clickListeners = (global as any).document._listeners?.['click'] || [];
@@ -67,8 +95,8 @@ export class DolphinTestUtils {
     el.value = value;
     const changeEvt = {
       target: el,
-      preventDefault: jest.fn(),
-      stopPropagation: jest.fn()
+      preventDefault: createMockFn(),
+      stopPropagation: createMockFn()
     };
     const changeListeners = (global as any).document._listeners?.['change'] || [];
     changeListeners.forEach((listener: any) => listener(changeEvt));
@@ -78,3 +106,4 @@ export class DolphinTestUtils {
 export function attachTesting(clientProto: any) {
   clientProto.testing = DolphinTestUtils;
 }
+

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+  <meta charset="UTF-8">
+  <title>Dolphin Store v2 — HTML Usage Guide 🐬</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white p-8 font-mono">
+
+  <h1 class="text-3xl font-bold text-cyan-400 mb-8">🐬 Dolphin Store v2 — HTML Usage Examples</h1>
+
+  <!-- ============================================================
+    1. BASIC SETUP — client बनाउने
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">① Setup</h2>
+    <pre class="bg-black/50 rounded-lg p-4 text-green-300 text-sm overflow-x-auto">
+&lt;script src="./dolphin-client.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const client = new DolphinClient('http://localhost:3000');
+  // client.store अब automatically available छ!
+&lt;/script&gt;
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    2. SEARCH — data-store-click मा search() call
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">② Search (खोज्ने)</h2>
+    
+    <!-- Live Search Input -->
+    <input
+      id="searchInput"
+      type="text"
+      placeholder="Search products..."
+      class="bg-white/5 border border-white/10 rounded-lg px-4 py-2 w-full mb-4 text-white"
+    />
+
+    <!-- Products list — client.store.products बाट data आउँछ -->
+    <div id="productList" class="grid grid-cols-3 gap-4"></div>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm mt-4 overflow-x-auto">
+// JavaScript मा:
+const searchInput = document.getElementById('searchInput');
+searchInput.addEventListener('input', (e) => {
+  // products collection मा search लाउने
+  client.store.products.search(e.target.value, ['title', 'description']);
+  renderProducts();
+});
+
+function renderProducts() {
+  const products = client.store.products.items; // filtered results
+  document.getElementById('productList').innerHTML =
+    products.map(p => `&lt;div&gt;${p.title} - $${p.price}&lt;/div&gt;`).join('');
+}
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    3. FILTER — category/field अनुसार filter
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">③ Filter (छान्ने)</h2>
+
+    <select id="categoryFilter" class="bg-white/5 border border-white/10 rounded-lg px-4 py-2 mb-4 text-white">
+      <option value="">All Categories</option>
+      <option value="electronics">Electronics</option>
+      <option value="jewelery">Jewelery</option>
+    </select>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm mt-4 overflow-x-auto">
+document.getElementById('categoryFilter').addEventListener('change', (e) => {
+  // category field मा exact match filter
+  client.store.products.filter('category', e.target.value);
+  renderProducts();
+});
+
+// Filter हटाउन:
+client.store.products.filter('category', null); // वा ''
+renderProducts();
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    4. RANGE — price range filter
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">④ Range Filter (मूल्य अनुसार)</h2>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+// $10 देखि $100 सम्म मात्र देखाउने
+client.store.products.range('price', 10, 100);
+renderProducts();
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    5. SORT — मूल्य/नाम अनुसार sort
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑤ Sort (मिलाउने)</h2>
+
+    <div class="flex gap-3 mb-4">
+      <button id="sortPriceAsc"  class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg text-sm">Price ↑</button>
+      <button id="sortPriceDesc" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg text-sm">Price ↓</button>
+      <button id="sortTitle"     class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg text-sm">Title A→Z</button>
+      <button id="clearAll"      class="bg-red-700  hover:bg-red-600  px-4 py-2 rounded-lg text-sm">Clear All</button>
+    </div>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+document.getElementById('sortPriceAsc').onclick = () => {
+  client.store.products.sort('price', true);  // true = ascending
+  renderProducts();
+};
+
+document.getElementById('sortPriceDesc').onclick = () => {
+  client.store.products.sort('price', false); // false = descending
+  renderProducts();
+};
+
+document.getElementById('sortTitle').onclick = () => {
+  client.store.products.sort('title', true);
+  renderProducts();
+};
+
+// सबै filters र sort हटाउन:
+document.getElementById('clearAll').onclick = () => {
+  client.store.products.clearFilters();
+  renderProducts();
+};
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    6. PAGINATION — पेजिनेशन
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑥ Pagination (पेजिनेशन)</h2>
+
+    <div id="paginatedList" class="mb-4 grid grid-cols-2 gap-3"></div>
+    <div id="pageInfo" class="text-slate-400 text-sm mb-3"></div>
+    <div class="flex gap-2">
+      <button id="prevPage" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm">← Prev</button>
+      <button id="nextPage" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm">Next →</button>
+    </div>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm mt-4 overflow-x-auto">
+let currentPage = 1;
+const PAGE_SIZE = 5;
+
+function renderPage() {
+  // page() ले filtered data बाट paginate गर्छ
+  const result = client.store.products.page(currentPage, PAGE_SIZE);
+  // result = { data: [...], total: 20, page: 1, size: 5, pages: 4, hasNext: true, hasPrev: false }
+
+  document.getElementById('paginatedList').innerHTML =
+    result.data.map(p => `&lt;div class="card"&gt;${p.title}&lt;/div&gt;`).join('');
+
+  document.getElementById('pageInfo').textContent =
+    `Page ${result.page} of ${result.pages} (${result.total} total)`;
+
+  document.getElementById('prevPage').disabled = !result.hasPrev;
+  document.getElementById('nextPage').disabled = !result.hasNext;
+}
+
+document.getElementById('prevPage').onclick = () => { currentPage--; renderPage(); };
+document.getElementById('nextPage').onclick = () => { currentPage++; renderPage(); };
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    7. OPTIMISTIC DELETE — तुरुन्त हटाउने, rollback on error
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑦ Optimistic Delete (तुरुन्त हटाउने)</h2>
+
+    <div id="deleteList" class="space-y-2 mb-4"></div>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+// Button click मा:
+async function deleteProduct(id) {
+  try {
+    await client.store.products.optimisticDelete(
+      id,                                          // हटाउने item को id
+      () => client.api.request('DELETE', `/products/${id}`)  // API call
+    );
+    // ✅ UI तुरुन्त update हुन्छ (API finish हुन कुर्दैन)
+    // ✅ API fail भए UI rollback हुन्छ
+    console.log('Deleted!');
+  } catch (err) {
+    alert('Delete failed! UI restored.');
+  }
+}
+
+// HTML मा:
+// &lt;button onclick="deleteProduct({{item.id}})"&gt;Delete&lt;/button&gt;
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    8. OPTIMISTIC UPDATE — तुरुन्त update, rollback on error
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑧ Optimistic Update (तुरुन्त update)</h2>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+async function updateProduct(id, newPrice) {
+  try {
+    await client.store.products.optimisticUpdate(
+      id,                                         // update गर्ने item को id
+      { price: newPrice },                        // नयाँ data
+      () => client.api.request('PUT', `/products/${id}`, { price: newPrice })
+    );
+    // ✅ UI तुरुन्त update — नयाँ price देखिन्छ
+    // ✅ API fail भए पुरानो price फर्कन्छ
+  } catch (err) {
+    alert('Update failed! Price restored.');
+  }
+}
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    9. PER-ITEM LOADING — specific item को loading state
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑨ Per-Item Loading (item-level spinner)</h2>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+// Delete button मा per-item spinner देखाउन:
+async function deleteWithSpinner(id) {
+  // Loading सुरु गर्ने
+  client.store.products.trackStart(id);
+  renderProducts(); // spinner देखिन्छ
+
+  try {
+    await client.api.request('DELETE', `/products/${id}`);
+    // Real delete after API success
+    client.store.products.deleteById(id);
+  } finally {
+    // Loading बन्द गर्ने
+    client.store.products.trackEnd(id);
+    renderProducts();
+  }
+}
+
+// Render मा spinner:
+function renderProducts() {
+  const items = client.store.products.items;
+  document.getElementById('list').innerHTML = items.map(item => `
+    &lt;div&gt;
+      ${item.title}
+      ${client.store.products.isLoading(item.id)
+        ? '&lt;span class="spinner"&gt;⏳&lt;/span&gt;'  // ← यो item loading छ
+        : `&lt;button onclick="deleteWithSpinner(${item.id})"&gt;Delete&lt;/button&gt;`
+      }
+    &lt;/div&gt;
+  `).join('');
+}
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    10. CHAIN — filter + search + sort एकैसाथ
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑩ Chaining — सबै एकैसाथ</h2>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+// filter + search + sort + page — एकैसाथ लाउन:
+client.store.products
+  .filter('category', 'electronics')   // electronics मात्र
+  .search('phone', ['title'])           // title मा 'phone' खोज्ने
+  .sort('price', true);                 // price ascending sort
+
+// अनि page को लागि:
+const page1 = client.store.products.page(1, 10);
+// → { data: [...filtered+sorted results, page 1...], total: X, pages: Y }
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    11. WEBSOCKET REAL-TIME — auto update
+  ============================================================ -->
+  <section class="mb-12 border border-white/10 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-yellow-400 mb-4">⑪ Real-time WebSocket (Server बाट automatic update)</h2>
+
+    <pre class="bg-black/50 rounded-lg p-4 text-cyan-300 text-sm overflow-x-auto">
+// यो automatically काम गर्छ!
+// Server ले यो format मा WebSocket message पठाउनु पर्छ:
+// topic: "db:sync/products"
+// payload: { type: "create"|"update"|"delete", data: {...} }
+
+// Server side (Node.js):
+ws.send(JSON.stringify({
+  topic: 'db:sync/products',
+  payload: { type: 'create', data: { id: 99, title: 'New Product', price: 29.99 } }
+}));
+
+// Dolphin ले automatically store.products.items मा थप्छ!
+// No extra code needed! 🎉
+    </pre>
+  </section>
+
+  <!-- ============================================================
+    12. FULL WORKING EXAMPLE
+  ============================================================ -->
+  <section class="mb-12 border border-cyan-500/30 rounded-xl p-6 bg-cyan-950/20">
+    <h2 class="text-xl font-bold text-cyan-400 mb-4">⑫ Complete Working Example</h2>
+
+    <pre class="bg-black/70 rounded-lg p-4 text-green-300 text-sm overflow-x-auto">
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;body&gt;
+
+  &lt;!-- Search + Filter UI --&gt;
+  &lt;input id="q" placeholder="Search..." oninput="handleSearch(this.value)"&gt;
+  &lt;select onchange="handleCategory(this.value)"&gt;
+    &lt;option value=""&gt;All&lt;/option&gt;
+    &lt;option value="electronics"&gt;Electronics&lt;/option&gt;
+  &lt;/select&gt;
+  &lt;button onclick="handleSort()"&gt;Sort by Price&lt;/button&gt;
+  &lt;button onclick="handleClear()"&gt;Clear&lt;/button&gt;
+
+  &lt;!-- Product List --&gt;
+  &lt;div id="list"&gt;&lt;/div&gt;
+
+  &lt;!-- Pagination --&gt;
+  &lt;button onclick="prevPage()"&gt;← Prev&lt;/button&gt;
+  &lt;span id="pageInfo"&gt;&lt;/span&gt;
+  &lt;button onclick="nextPage()"&gt;Next →&lt;/button&gt;
+
+  &lt;script src="./dolphin-client.js"&gt;&lt;/script&gt;
+  &lt;script&gt;
+    const client = new DolphinClient('http://localhost:3000');
+    let page = 1;
+    let sortAsc = true;
+
+    // Store subscribe — data बदलिए automatically render
+    client.store.subscribe(() => render());
+
+    // Data fetch हुन्छ automatically
+    const _ = client.store.products; // access गर्नासाथ fetch सुरु
+
+    function handleSearch(val) {
+      client.store.products.search(val, ['title', 'description']);
+      page = 1;
+    }
+
+    function handleCategory(val) {
+      client.store.products.filter('category', val);
+      page = 1;
+    }
+
+    function handleSort() {
+      sortAsc = !sortAsc;
+      client.store.products.sort('price', sortAsc);
+    }
+
+    function handleClear() {
+      client.store.products.clearFilters();
+      page = 1;
+    }
+
+    async function deleteProduct(id) {
+      client.store.products.trackStart(id);
+      try {
+        await client.store.products.optimisticDelete(
+          id,
+          () => client.api.request('DELETE', `/products/${id}`)
+        );
+      } catch {
+        alert('Delete failed!');
+      } finally {
+        client.store.products.trackEnd(id);
+      }
+    }
+
+    function render() {
+      const result = client.store.products.page(page, 8);
+
+      document.getElementById('list').innerHTML = result.data.map(p => `
+        &lt;div&gt;
+          &lt;strong&gt;${p.title}&lt;/strong&gt; — $${p.price}
+          ${client.store.products.isLoading(p.id)
+            ? '&lt;span&gt;⏳ Deleting...&lt;/span&gt;'
+            : `&lt;button onclick="deleteProduct(${p.id})"&gt;🗑 Delete&lt;/button&gt;`}
+        &lt;/div&gt;
+      `).join('');
+
+      document.getElementById('pageInfo').textContent =
+        `Page ${result.page}/${result.pages} (${result.total} items)`;
+    }
+
+    function prevPage() { if (page &gt; 1) { page--; render(); } }
+    function nextPage() {
+      const r = client.store.products.page(page, 8);
+      if (r.hasNext) { page++; render(); }
+    }
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+    </pre>
+  </section>
+
+</body>
+</html>

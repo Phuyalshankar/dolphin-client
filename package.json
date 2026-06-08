@@ -1,6 +1,6 @@
 {
   "name": "dolphin-client",
-  "version": "1.0.5",
+  "version": "1.1.4",
   "description": "HTML is back! Hookless, framework-agnostic real-time reactive DOM-binding client for Dolphin Server with WebSockets, WebRTC signaling, and offline REST API fallbacks.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -13,11 +13,17 @@
       "require": "./dist/index.cjs"
     }
   },
+  "bin": {
+    "dolphin-client": "./bin/cli.cjs"
+  },
   "files": [
     "dist",
     "README.md",
     "LICENSE",
-    "fulltutorial.md"
+    "fulltutorial.md",
+    "scripts",
+    ".vscode",
+    "bin"
   ],
   "scripts": {
     "build": "npm run build:iife && npm run build:min && npm run build:esm && npm run build:cjs && tsc",
@@ -25,7 +31,8 @@
     "build:min": "esbuild ./src/index.ts --bundle --minify --outfile=dist/dolphin-client.min.js --format=iife --global-name=DolphinModule",
     "build:esm": "esbuild ./src/index.ts --bundle --outfile=dist/index.js --format=esm",
     "build:cjs": "esbuild ./src/index.ts --bundle --outfile=dist/index.cjs --format=cjs",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/postinstall.js"
   },
   "jest": {
     "preset": "ts-jest",

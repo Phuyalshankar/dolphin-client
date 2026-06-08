@@ -503,6 +503,113 @@ Ternary operator (`condition ? true : false`) वा बहु-लाइन `if/
 <button data-store-click="app.darkMode = !app.darkMode">डार्क मोड अन/अफ</button>
 ```
 
+### १०.१.३. Declarative Store Initialization & Context Containers (`<dolphin-store>`) - स्टोर घोषणा, प्रारम्भिकरण र अटो-बाइन्डिङ
+
+Dolphin Client v2.0 introduces the `<dolphin-store>` tag for declaring, seeding, and auto-wiring reactive stores directly in HTML without writing custom JavaScript scripts.
+
+#### क) Seed-Only Mode (विशुद्ध डेटा सीडिङ)
+If the `<dolphin-store>` tag does not contain child elements, it seeds the store and remains hidden (`display: none`). You can seed data via tag attributes or inline JSON content:
+
+**Attribute-Based Seeding:**
+```html
+<!-- Automatically seeds store "app" with boolean, numeric, null, and string types -->
+<dolphin-store name="app" count="0" isAdding="false" user="null" theme="dark"></dolphin-store>
+```
+
+**JSON-Based Seeding:**
+```html
+<!-- Seed complex objects/arrays by putting JSON content inside the tag -->
+<dolphin-store name="app">
+  {
+    "count": 10,
+    "user": { "name": "Shankar", "role": "admin" },
+    "loggedIn": true
+  }
+</dolphin-store>
+```
+
+#### ख) Context Container Dual-Mode (डबल-मोड - डेटा कन्टेनर)
+If the `<dolphin-store>` tag contains child elements, it acts as a **reactive context container** and remains visible. Its children can read and write to the store dynamically using `data-store-*` directives:
+
+```html
+<!-- Acts as the reactive container for 'store/profile' -->
+<dolphin-store name="profile" username="Shankar" role="Admin">
+  <div class="card">
+    <h3 data-rt-text="username"></h3>
+    <span class="badge" data-rt-text="role"></span>
+  </div>
+</dolphin-store>
+```
+
+#### ग) Template Auto-Wiring (टेम्पलेट स्वतः-कनेक्सन)
+By setting the `template` attribute on a `<dolphin-store>`, Dolphin will automatically generate a reactive binding `div` right after it, compile the specified template selector, and render it with the store's seeded state immediately on page load:
+
+```html
+<!-- 1. The Svelte-style template -->
+<template id="counter-ui">
+  <div class="counter-box">
+    <p>Count: {{count}}</p>
+    <button data-rt-click="app.count = app.count + 1">Increment</button>
+  </div>
+</template>
+
+<!-- 2. Auto-wire the store app to the template (No separate wrapper div required!) -->
+<dolphin-store name="app" template="#counter-ui" count="5"></dolphin-store>
+```
+Under the hood, this dynamically injects a binding container that subscribes to `store/app` and updates the UI in real-time.
+
+### १०.१.४. Database Store Collections & CRUD Actions in HTML (डेटाबेस स्टोर कलेक्सन र बिना जाभास्क्रिप्ट CRUD र फिल्टर्स)
+
+Dolphin Client v2.0 ले डेटाबेस स्टोरका कलेक्सनहरूलाई (जुन स्वतः REST र WebSockets बाट सिंक हुन्छन्) सिधै HTML attributes भित्रैबाट चलाउन र व्यवस्थापन गर्न मिल्ने सुविधा प्रदान गर्दछ।
+
+यदि कुनै `<dolphin-store>` वा dynamic database collection (जस्तै `products` वा `users`) दर्ता छ भने, तपाईँले HTML elements मा `data-store-click`, `data-store-input`, वा `data-store-change` प्रयोग गरेर सिधै ती कलेक्सनका Methods कल गर्न सक्नुहुन्छ।
+
+कल गरेपछि Dolphin ले स्वतः DOM लाई reactive रूपमा re-render गराउँछ।
+
+#### उपलब्ध मुख्य Collection Methods:
+* **`collectionName.search(term, fields)`**: पाठ (text) खोज्नका लागि (fields array ऐच्छिक हो)।
+* **`collectionName.filter(field, value)`**: कुनै निश्चित field को भ्यालुअनुसार फिल्टर गर्न।
+* **`collectionName.range(field, min, max)`**: अंकहरूको सीमाअनुसार फिल्टर गर्न।
+* **`collectionName.sort(field, asc)`**: कुनै फिल्डको आधारमा alphabetical वा numerical क्रममा मिलाउन (asc `true`/`false` हुन्छ)।
+* **`collectionName.clearFilters()`**: सबै फिल्टर्स र सर्टिङ हटाउन।
+* **`collectionName.deleteById(id)`**: आईडीको आधारमा आइटम हटाउन (DOM र database दुवैमा)।
+* **`collectionName.updateById(id, updates)`**: आईडीको आधारमा आइटम अपडेट गर्न।
+* **`collectionName.add(item)`**: नयाँ आइटम थप्न।
+
+#### HTML मा प्रयोगको उदाहरण:
+```html
+<!-- १. डेटाबेस स्टोर कलेक्सन दर्ता गर्ने -->
+<dolphin-store name="products"></dolphin-store>
+
+<!-- २. बिना जाभास्क्रिप्ट टेक्स्ट सर्च (input event मा चल्ने) -->
+<input placeholder="Search products..." data-store-input="products.search(this.value)" />
+
+<!-- ३. विना जाभास्क्रिप्ट ड्रपडाउन फिल्टर (change event मा चल्ने) -->
+<select data-store-change="products.filter('category', this.value)">
+  <option value="">All Categories</option>
+  <option value="electronics">Electronics</option>
+  <option value="books">Books</option>
+</select>
+
+<!-- ४. मूल्यअनुसार सर्टिङ र फिल्टर क्लियर गर्ने बटनहरू -->
+<button data-store-click="products.sort('price', true)">कम मूल्य पहिला</button>
+<button data-store-click="products.sort('price', false)">उच्च मूल्य पहिला</button>
+<button data-store-click="products.clearFilters()">फिल्टर हटाउनुहोस्</button>
+
+<!-- ५. डाटाहरू रेन्डर गर्ने र डिलिट बटन राख्ने -->
+<div data-rt-bind="store/products" data-rt-template="#product-card-template"></div>
+<template id="product-card-template">
+  {#each items as item}
+    <div class="product-item">
+      <h4>{item.name}</h4>
+      <p>मूल्य: ${item.price}</p>
+      <!-- सिधै HTML बाट database item delete गर्ने (DOM स्वतः अपडेट हुन्छ!) -->
+      <button data-store-click="products.deleteById(item.id)">मेटाउनुहोस्</button>
+    </div>
+  {/each}
+</template>
+```
+
 ### १०.२. Declarative Validations (`data-validate`)
 Apply robust validation rules to inputs and forms instantly. Tagged invalid inputs automatically receive `.invalid` classes and publish error text:
 
@@ -836,21 +943,68 @@ Dolphin Client मा भएको **DolphinStore** ले तपाईँला
 1. **स्वचालित HTTP Fetch**: `/devices` वा `/orders` मा `GET` रिक्वेस्ट पठाउँछ।
 2. **स्वचालित WebSocket Sync**: `db:sync/devices` च्यानलमा स्वतः सब्सक्राइब गर्छ र ब्याकइन्डमा कुनै आइटम `create`, `update`, वा `delete` हुँदा कलेक्सन डेटा रियल-टाइम अपडेट गर्छ।
 
-#### क) डेटा फिल्टरिङ र सर्टिङ (Filtering & Sorting)
-तपाईँले स्टोर कलेक्सनहरूमा `.where(filterFn)` र `.orderBy(key, direction)` प्रयोग गरेर इन-मेमोरी फिल्टर र सर्ट गर्न सक्नुहुन्छ:
+#### क) chainable DataEngine र Filters (डेटा फिल्टरिङ, सर्च र सर्टिङ)
+Dolphin v2.0 ले नयाँ chainable `DataEngine` ल्याएको छ जसले इन-मेमोरी रुपमै धेरै छिटो र प्रभावकारी फिल्टर, सर्च र सर्टिङ गर्दछ:
 
 ```javascript
-const orders = dolphin.store.orders;
+const products = dolphin.store.products;
 
-// active र total 50 भन्दा बढी भएका अर्डरहरू फिल्टर गरी मूल्यअनुसार सर्ट गर्ने
-const highValueOrders = orders
-  .where(o => o.status === 'active' && o.total > 50)
-  .orderBy('price', 'desc');
+// १. Chainable search/filter/range/sort
+const results = products
+  .search('laptop', ['name', 'description'])  // Case-insensitive free text search
+  .filter('inStock', true)                     // Exact match filter
+  .range('price', 500, 1500)                   // Numeric range
+  .sort('price', true);                        // Sorting (field, ascending=true)
 
-console.log("Filtered orders:", highValueOrders.items);
+console.log("फिल्टर गरिएका उत्पादनहरू:", results.items);
+
+// २. Pagination (पेजिनेसन)
+const pageData = products.page(1, 10); // Page 1, size 10
+console.log("Page data:", pageData.data);
+console.log("Total pages:", pageData.pages);
+console.log("Has next page?", pageData.hasNext);
+
+// ३. filters clear गर्ने र reset गर्ने
+products.clearFilters();
 ```
 
-#### ख) म्यानुअल सब्सक्राइब (Manual Subscription & Snapshot)
+#### ख) Optimistic UI Updates with Rollback (अप्टिमिस्टिक अपडेटहरू)
+यदि तपाईँ इन्टरनेट स्लो भएको बेला वा रियल-टाइम अनुभव दिनका लागि क्लाइन्टमा डेटा तुरुन्त अपडेट (म्युटेट) गर्न चाहनुहुन्छ भने `optimisticDelete` र `optimisticUpdate` चलाउन सक्नुहुन्छ। यसले UI मा तुरुन्तै परिवर्तन देखाउँछ र ब्याकइन्ड API फेल भएमा स्वतः पहिलेकै अवस्थामा फर्काइदिन्छ (rollback):
+
+```javascript
+// १. Optimistic Delete (मेटाउने र फेल भएमा रोलब्याक गर्ने)
+await dolphin.store.products.optimisticDelete(105, () => {
+  return dolphin.api.delete('/products/105');
+});
+
+// २. Optimistic Update (अपडेट गर्ने र फेल भएमा रोलब्याक गर्ने)
+await dolphin.store.products.optimisticUpdate(105, { price: 999 }, () => {
+  return dolphin.api.put('/products/105', { price: 999 });
+});
+```
+
+#### ग) Per-Item Loading State Tracking (प्रति-आइटम लोडिङ ट्र्याकिङ)
+डेटाबेसका कुनै विशेष आइटमहरूमा प्रोसेसिंग (loading) हुँदैछ कि छैन भनेर जाँच गर्न प्रति-आइटम ट्र्याकिङ चलाउन सकिन्छ (उदाहरणका लागि: एउटा मात्र कार्डमा लोडिङ स्पिनर देखाउन):
+
+```javascript
+const products = dolphin.store.products;
+
+// १. लोडिङ सुरु भएको जनाउन
+products.trackStart(105);
+console.log(products.isLoading(105)); // true
+
+// २. लोडिङ समाप्त भएको जनाउन
+products.trackEnd(105);
+console.log(products.isLoading(105)); // false
+```
+
+#### घ) Race Condition Guards, Batching & Resource Cleanup
+Dolphin v2.0 ले ब्याकइन्ड र मेमोरी व्यवस्थापनमा निम्न सुधारहरू गरेको छ:
+* **Race Condition Guard**: एउटै कलेक्सन बारम्बार र एकै पटक fetch हुन खोज्दा रेसिङ हुन नदिन `_fetching` Set गार्ड राखिएको छ।
+* **Batch Notification (`queueMicrotask`)**: धेरै छिटो र लगातार हुने स्टेट अपडेटहरूलाई एकै पटक ब्याच गरी DOM र ऐप्लिकेसनलाई single render cycle मा सूचित गर्दछ, जसले गर्दा UI ६०fps मा स्मूथ चल्छ।
+* **Memory Leak Fixes on Destroy**: `destroy()` कल गर्दा सबै एक्टिभ WebSocket च्यानलहरू र unsubscribe handlers लाई सफा गरिन्छ।
+
+#### ङ) म्यानुअल सब्सक्राइब (Manual Subscription & Snapshot)
 ```javascript
 // १. स्टोरमा आउने जुनसुकै अपडेट सुन्न सब्सक्राइब गर्ने
 const unsubscribe = dolphin.store.subscribe(() => {

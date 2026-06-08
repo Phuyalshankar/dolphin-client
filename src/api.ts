@@ -40,7 +40,7 @@ export class APIHandler {
 
         target.request = (method, subPath, body, options) => {
             const finalPath = subPath
-                ? `${joined}/${subPath.startsWith('/') ? subPath.slice(1) : subPath}`
+                ? (joined ? `${joined}/${subPath.startsWith('/') ? subPath.slice(1) : subPath}` : subPath)
                 : joined;
             return this.request(method, finalPath, body, options);
         };
@@ -257,8 +257,11 @@ export class APIHandler {
         let finalMethod = method.toUpperCase();
         let finalBody = body;
 
+        // Only set Content-Type for requests that have a body
+        // GET/HEAD requests don't need it and it triggers unnecessary CORS preflight
+        const hasBody = !['GET', 'HEAD'].includes(finalMethod);
         const headers = {
-            'Content-Type': 'application/json',
+            ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
             ...(options.headers || {}),
         };
 

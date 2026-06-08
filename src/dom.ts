@@ -8,7 +8,89 @@ export function attachDOMBinding(clientProto: any) {
     }
 
     // Helper to resolve template as either a raw HTML string or a CSS selector pointing to a <template> node
-    function resolveTemplate(el: Element): string | null {
+        // Helper to evaluate a JS expression with a context object safely
+    function evaluateExpression(expr: string, ctx: any): any {
+        if (!ctx || typeof ctx !== 'object') return undefined;
+        try {
+            const safeCtx = new Proxy(ctx, {
+                has(target, prop) {
+                    return true;
+                },
+                get(target, prop) {
+                    if (typeof prop === 'string') {
+                        if (prop in target) return target[prop];
+                        if (typeof globalThis !== 'undefined' && prop in globalThis) return (globalThis as any)[prop];
+                        if (typeof window !== 'undefined' && prop in window) return (window as any)[prop];
+                    }
+                    return undefined;
+                }
+            });
+            const fn = new Function('ctx', `with(ctx) { return (${expr}); }`);
+            return fn(safeCtx);
+        } catch {
+            return ctx[expr];
+        }
+    }
+
+    function splitByUnquotedChar(str: string, char: string): string[] {
+        const parts: string[] = [];
+        let current = '';
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        let inBacktick = false;
+        let depth = 0;
+        for (let i = 0; i < str.length; i++) {
+            const c = str[i];
+            if (c === "'" && !inDoubleQuote && !inBacktick) {
+                inSingleQuote = !inSingleQuote;
+            } else if (c === '"' && !inSingleQuote && !inBacktick) {
+                inDoubleQuote = !inDoubleQuote;
+            } else if (c === '`' && !inSingleQuote && !inDoubleQuote) {
+                inBacktick = !inBacktick;
+            } else if (c === '(' || c === '[' || c === '{') {
+                if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
+            } else if (c === ')' || c === ']' || c === '}') {
+                if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
+            }
+            
+            if (c === char && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
+                parts.push(current);
+                current = '';
+            } else {
+                current += c;
+            }
+        }
+        parts.push(current);
+        return parts;
+    }
+
+    function splitFirstUnquotedColon(str: string): [string, string] | null {
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        let inBacktick = false;
+        let depth = 0;
+        for (let i = 0; i < str.length; i++) {
+            const c = str[i];
+            if (c === "'" && !inDoubleQuote && !inBacktick) {
+                inSingleQuote = !inSingleQuote;
+            } else if (c === '"' && !inSingleQuote && !inBacktick) {
+                inDoubleQuote = !inDoubleQuote;
+            } else if (c === '`' && !inSingleQuote && !inDoubleQuote) {
+                inBacktick = !inBacktick;
+            } else if (c === '(' || c === '[' || c === '{') {
+                if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
+            } else if (c === ')' || c === ']' || c === '}') {
+                if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
+            }
+            
+            if (c === ':' && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
+                return [str.slice(0, i), str.slice(i + 1)];
+            }
+        }
+        return null;
+    }
+
+function resolveTemplate(el: Element): string | null {
         const template = el.getAttribute('data-rt-template');
         if (!template) return null;
         if (typeof document !== 'undefined' && !template.includes('<')) {
@@ -27,9 +109,27 @@ export function attachDOMBinding(clientProto: any) {
         if (!templateStr.includes('{#if') && !templateStr.includes('{#each')) {
             let result = templateStr;
             for (let key in context) {
-                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), context[key] !== undefined && context[key] !== null ? context[key] : '');
+                const escapedKey = key.replace(/[.*+?^$${}()|[\]\\]/g, '\\$&');
+                result = result.replace(new RegExp('\\{\\{' + escapedKey + '\\}\}', 'g'), context[key] !== undefined && context[key] !== null ? context[key] : '');
             }
+            // Resolve any remaining nested/dotted property paths (e.g. rating.rate, user?.profile?.name)
+            result = result.replace(/\{\{([\s\S]*?)\}\}/g, (match, expr) => {
+                const trimmed = expr.trim();
+                if (!trimmed) return '';
+                if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(?:\??\.[a-zA-Z_$][a-zA-Z0-9_$]*)+$/.test(trimmed)) {
+                    const parts = trimmed.split(/\??\./);
+                    let val = context;
+                    for (const part of parts) {
+                        if (val === undefined || val === null) {
+                            val = undefined;
+                            break;
+                        }
+                        val = val[part];
+                    }
+                    return val !== undefined && val !== null ? val : '';
+                }
+                return match;
+            });
             return result;
         }
 
@@ -155,7 +255,9 @@ export function attachDOMBinding(clientProto: any) {
         if (typeof document === 'undefined') return html;
         try {
             const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+            const hasBodyOrHtml = /<\s*(?:body|html)\b/i.test(html);
+            const parseString = hasBodyOrHtml ? html : `<body>${html}</body>`;
+            const doc = parser.parseFromString(parseString, 'text/html');
             const body = doc.body;
 
             const sanitizeNode = (el: Element) => {
@@ -295,7 +397,7 @@ export function attachDOMBinding(clientProto: any) {
     }
 
     // ─── PHASE 3: GLOBAL REACTIVE STORES ──────────────────────────────────────
-    clientProto.setStoreState = function(storeName: string, key: string, val: any) {
+    clientProto.setStoreState = function(storeName: string, key: string, val: any, originEl?: Element) {
         this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
         if (!this.uiStores.has(storeName)) {
             this.uiStores.set(storeName, {});
@@ -310,6 +412,7 @@ export function attachDOMBinding(clientProto: any) {
         if (typeof document !== 'undefined') {
             const readElements = document.querySelectorAll(`[data-store-read="${storeName}.${key}"]`);
             readElements.forEach((el: any) => {
+                if (el === originEl) return;
                 if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
                     if (el.type === 'checkbox') {
                         el.checked = !!val;
@@ -337,6 +440,96 @@ export function attachDOMBinding(clientProto: any) {
     clientProto._scanStoreBinds = function() {
         if (typeof document === 'undefined') return;
         
+        // 1. Declarative Store Initialization via <dolphin-store>
+        const storeElements = document.querySelectorAll('dolphin-store');
+        storeElements.forEach((el: any) => {
+            if (typeof el.getAttribute !== 'function') return;
+            const storeName = el.getAttribute('name') || el.getAttribute('data-store');
+            if (!storeName) return;
+
+            // Check if this element has child HTML elements (acts as context container)
+            const hasChildren = el.children && el.children.length > 0;
+
+            if (hasChildren) {
+                // Dual-mode: Store seeder + Context Container
+                // Keep element visible and wire up as a reactive context binding
+                if (typeof el.setAttribute === 'function') {
+                    el.setAttribute('data-rt-bind', `store/${storeName}`);
+                    el.setAttribute('data-rt-type', 'context');
+                }
+            } else {
+                // Seed-only mode: hide the element (no children to display)
+                if (el.style) {
+                    el.style.display = 'none';
+                }
+            }
+
+            // Option A: Parse JSON text content inside the tag
+            // Only if text content looks like JSON (starts with {), not child HTML
+            if (!hasChildren) {
+                const content = el.textContent ? el.textContent.trim() : '';
+                if (content && content.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(content);
+                        if (parsed && typeof parsed === 'object') {
+                            Object.keys(parsed).forEach(key => {
+                                this.setStoreState(storeName, key, parsed[key]);
+                            });
+                        }
+                    } catch (err) {
+                        console.error(`[Dolphin Store Init Error] Failed to parse JSON inside <dolphin-store name="${storeName}">:`, err);
+                    }
+                }
+            }
+
+            // Option B: Parse key-value attributes and seed the store
+            // Also check for 'template' attribute for auto-wiring
+            const templateSelector = el.getAttribute('template');
+            if (el.attributes) {
+                const excludeAttrs = ['name', 'data-store', 'style', 'data-rt-bind', 'data-rt-type', 'template'];
+                Array.from(el.attributes).forEach((attr: any) => {
+                    if (!excludeAttrs.includes(attr.name)) {
+                        let val: any = attr.value;
+                        if (val === 'true') val = true;
+                        else if (val === 'false') val = false;
+                        else if (val === 'null') val = null;
+                        else if (!isNaN(Number(val)) && val.trim() !== '') val = Number(val);
+                        
+                        this.setStoreState(storeName, attr.name, val);
+                    }
+                });
+            }
+
+            // Auto-wire: if template="#selector" is set, inject a reactive div after this element
+            if (templateSelector && !hasChildren && el.parentNode && typeof document !== 'undefined') {
+                // Only inject if not already injected (check for marker attribute)
+                const markerId = `_ds_${storeName}_${templateSelector.replace(/[^a-z0-9]/gi, '_')}`;
+                let wrapper = document.querySelector(`[data-ds-wired="${markerId}"]`);
+                if (!wrapper) {
+                    wrapper = document.createElement('div');
+                    wrapper.setAttribute('data-rt-bind', `store/${storeName}`);
+                    wrapper.setAttribute('data-rt-template', templateSelector);
+                    wrapper.setAttribute('data-ds-wired', markerId);
+                    el.parentNode.insertBefore(wrapper, el.nextSibling);
+                }
+
+                // Immediately trigger a DOM update for this store so that the template renders
+                if (typeof this._updateDOM === 'function') {
+                    this.uiStores = this.uiStores || new Map();
+                    const currentStore = this.uiStores.get(storeName) || {};
+                    this._updateDOM(`store/${storeName}`, currentStore);
+                }
+            }
+
+            // If acting as context container, trigger DOM update so children render immediately
+            if (hasChildren && typeof this._updateDOM === 'function') {
+                this.uiStores = this.uiStores || new Map();
+                const currentStore = this.uiStores.get(storeName) || {};
+                this._updateDOM(`store/${storeName}`, currentStore);
+            }
+        });
+
+        // 2. Scan standard inputs with data-store-write to initialize store keys if not already set
         const writeEls = document.querySelectorAll('[data-store-write]');
         writeEls.forEach((el: any) => {
             const writeBind = el.getAttribute('data-store-write');
@@ -394,13 +587,14 @@ export function attachDOMBinding(clientProto: any) {
                 if (key) return ctx[key];
                 return ctx;
             }
-            current = current.parentElement;
+            current = current.parentElement || current.parentNode;
         }
         return null;
     };
 
     clientProto._executeStoreAction = function(expression: string, element?: Element) {
         this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
+        const parentCtx = (element && typeof this.getClosestContext === 'function') ? this.getClosestContext(element) : null;
         
         const context = new Proxy({}, {
             has: (target, prop) => {
@@ -408,8 +602,79 @@ export function attachDOMBinding(clientProto: any) {
             },
             get: (target, prop) => {
                 if (typeof prop === 'string') {
+                    if (prop === 'log') {
+                        return (arg: any) => {
+                            if (arg === undefined) {
+                                const allStores: Record<string, any> = {};
+                                this.uiStores.forEach((val: any, key: string) => {
+                                    allStores[key] = { ...val };
+                                });
+                                console.log(`%c📊 [Dolphin All UI Stores]:`, 'color: #06b6d4; font-weight: bold;', allStores);
+                            } else if (arg && typeof arg === 'object' && arg.__isStoreProxy__) {
+                                const storeName = arg.__storeName__;
+                                const store = this.uiStores.get(storeName);
+                                console.log(`%c📊 [Dolphin Store: ${storeName}]:`, 'color: #06b6d4; font-weight: bold;', store ? { ...store } : {});
+                            } else {
+                                console.log(`%c📊 [Dolphin Log]:`, 'color: #06b6d4; font-weight: bold;', arg);
+                            }
+                        };
+                    }
+
+                    // ── DolphinStore (Database Store) collection access ──────────
+                    if (this.store && this.store.data && typeof this.store.data.has === 'function' && this.store.data.has(prop)) {
+                        const collection = this.store.data.get(prop);
+                        const self = this;
+                        const collectionName = prop;
+
+                        // Methods that trigger DOM re-render after execution
+                        const RENDER_METHODS = new Set([
+                            'search', 'filter', 'range', 'sort', 'clearFilters',
+                            'where', 'orderBy', 'reset',
+                            'add', 'updateById', 'deleteById',
+                            'optimisticDelete', 'optimisticUpdate',
+                            'trackStart', 'trackEnd'
+                        ]);
+
+                        return new Proxy(collection, {
+                            get(target: any, method: string) {
+                                if (typeof target[method] === 'function') {
+                                    return (...args: any[]) => {
+                                        const result = target[method](...args);
+                                        // Auto re-render DOM bindings for this collection
+                                        if (RENDER_METHODS.has(method) && typeof self._updateDOM === 'function') {
+                                            const triggerRender = () => {
+                                                if (typeof self._updateDOM === 'function') {
+                                                    self._updateDOM(`store/${collectionName}`, collection);
+                                                }
+                                            };
+                                            // Handle both sync and async (optimisticDelete/Update)
+                                            if (result && typeof result.then === 'function') {
+                                                result.then(triggerRender).catch(triggerRender);
+                                            } else {
+                                                triggerRender();
+                                            }
+                                        }
+                                        return result;
+                                    };
+                                }
+                                return target[method];
+                            }
+                        });
+                    }
+
+                    if (parentCtx && parentCtx[prop] !== undefined) {
+                        return parentCtx[prop];
+                    }
+                    if (typeof globalThis !== 'undefined' && prop in globalThis) {
+                        return (globalThis as any)[prop];
+                    }
+                    if (typeof window !== 'undefined' && prop in window) {
+                        return (window as any)[prop];
+                    }
                     return new Proxy({}, {
                         get: (subTarget, subProp) => {
+                            if (subProp === '__storeName__') return prop;
+                            if (subProp === '__isStoreProxy__') return true;
                             if (typeof subProp === 'string') {
                                 return this.getStoreState(prop, subProp);
                             }
@@ -438,7 +703,6 @@ export function attachDOMBinding(clientProto: any) {
         }
     };
 
-    /** @private */
     clientProto._initDOMBinding = function() {
         if (this._domInitialized) return;
         this._domInitialized = true;
@@ -460,7 +724,7 @@ export function attachDOMBinding(clientProto: any) {
                         const storeName = parts[0];
                         const key = parts[1];
                         const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-                        this.setStoreState(storeName, key, val);
+                        this.setStoreState(storeName, key, val, e.target);
                     }
                 }
 
@@ -896,24 +1160,33 @@ export function attachDOMBinding(clientProto: any) {
                 const processNode = (node: Element) => {
                     if (node.hasAttribute('data-rt-text')) {
                         const key = node.getAttribute('data-rt-text');
-                        if (key && processedPayload[key] !== undefined && processedPayload[key] !== null) node.textContent = processedPayload[key];
+                        if (key) {
+                            const val = evaluateExpression(key, processedPayload);
+                            if (val !== undefined && val !== null) node.textContent = val;
+                        }
                     }
                     if (node.hasAttribute('data-rt-html')) {
                         const key = node.getAttribute('data-rt-html');
-                        if (key && processedPayload[key] !== undefined && processedPayload[key] !== null) {
-                            node.innerHTML = sanitizeHTML(processedPayload[key]); // Sanitized against XSS!
+                        if (key) {
+                            const val = evaluateExpression(key, processedPayload);
+                            if (val !== undefined && val !== null) {
+                                node.innerHTML = sanitizeHTML(val); // Sanitized against XSS!
+                            }
                         }
                     }
                     if (node.hasAttribute('data-rt-attr')) {
                         const attrStr = node.getAttribute('data-rt-attr');
                         if (attrStr) {
-                            attrStr.split(',').forEach(b => {
-                                const parts = b.split(':');
-                                if (parts.length === 2) {
-                                    const attrName = parts[0].trim();
-                                    const key = parts[1].trim();
-                                    if (attrName && key && processedPayload[key] !== undefined && processedPayload[key] !== null) {
-                                        node.setAttribute(attrName, processedPayload[key]);
+                            splitByUnquotedChar(attrStr, ',').forEach(b => {
+                                const pair = splitFirstUnquotedColon(b);
+                                if (pair) {
+                                    const attrName = pair[0].trim();
+                                    const key = pair[1].trim();
+                                    if (attrName && key) {
+                                        const val = evaluateExpression(key, processedPayload);
+                                        if (val !== undefined && val !== null) {
+                                            node.setAttribute(attrName, val);
+                                        }
                                     }
                                 }
                             });
@@ -922,25 +1195,25 @@ export function attachDOMBinding(clientProto: any) {
                     if (node.hasAttribute('data-rt-class')) {
                         const classStr = node.getAttribute('data-rt-class');
                         if (classStr) {
-                            classStr.split(',').forEach(b => {
-                                const parts = b.split(':');
-                                if (parts.length === 2) {
-                                     const className = parts[0].trim();
-                                     const key = parts[1].trim();
+                            splitByUnquotedChar(classStr, ',').forEach(b => {
+                                const pair = splitFirstUnquotedColon(b);
+                                if (pair) {
+                                     const className = pair[0].trim();
+                                     const key = pair[1].trim();
                                      const classNames = className.split(/\s+/).filter(Boolean);
-                                     if (processedPayload[key]) {
+                                     if (evaluateExpression(key, processedPayload)) {
                                          classNames.forEach(c => node.classList.add(c));
                                      } else {
                                          classNames.forEach(c => node.classList.remove(c));
                                      }
-                                }
+                                 }
                             });
                         }
                     }
                     if (node.hasAttribute('data-rt-if')) {
                         const key = node.getAttribute('data-rt-if');
                         if (key) {
-                            if (processedPayload[key]) {
+                            if (evaluateExpression(key, processedPayload)) {
                                 (node as HTMLElement).style.display = '';
                             } else {
                                 (node as HTMLElement).style.display = 'none';
@@ -950,7 +1223,7 @@ export function attachDOMBinding(clientProto: any) {
                     if (node.hasAttribute('data-rt-hide')) {
                         const key = node.getAttribute('data-rt-hide');
                         if (key) {
-                            if (processedPayload[key]) {
+                            if (evaluateExpression(key, processedPayload)) {
                                 (node as HTMLElement).style.display = 'none';
                             } else {
                                 (node as HTMLElement).style.display = '';
@@ -1011,23 +1284,38 @@ export function attachDOMBinding(clientProto: any) {
 
             resolvingSet.add(src);
 
-            let promise = componentPromiseCache.get(src);
+            const hashIndex = src.indexOf('#');
+            const url = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
+            const selector = hashIndex !== -1 ? src.substring(hashIndex) : null;
+
+            let promise = componentPromiseCache.get(url);
             if (!promise) {
-                promise = fetch(src).then(res => {
+                promise = fetch(url).then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.text();
                 });
                 // @fix: Evict failed promises from cache so retries work (was: cached error forever)
-                promise.catch(() => componentPromiseCache.delete(src));
-                componentPromiseCache.set(src, promise);
+                promise.catch(() => componentPromiseCache.delete(url));
+                componentPromiseCache.set(url, promise);
             }
 
             let content = '';
             try {
                 content = await promise;
+                if (selector && typeof DOMParser !== 'undefined') {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(content, 'text/html');
+                    const targetEl = doc.querySelector(selector);
+                    if (targetEl) {
+                        content = targetEl.outerHTML;
+                    } else {
+                        console.warn(`[Dolphin Component Warning]: Selector "${selector}" not found in imported file "${url}".`);
+                        content = `<span style="color:orange;font-weight:bold;">Selector ${selector} not found in ${url}</span>`;
+                    }
+                }
             } catch (err) {
-                console.error(`[Dolphin Component Error]: Failed to fetch component "${src}":`, err);
-                content = `<span style="color:red;font-weight:bold;">Failed to import ${src}</span>`;
+                console.error(`[Dolphin Component Error]: Failed to fetch component "${url}":`, err);
+                content = `<span style="color:red;font-weight:bold;">Failed to import ${url}</span>`;
             }
 
             // @fix: Sanitize fetched component HTML to prevent XSS injection (was: raw innerHTML)

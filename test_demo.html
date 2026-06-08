@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dolphin Client 🐬 - Bug-Free Test Page</title>
+  <!-- DolphinCSS CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dolphincss@1.3.2/dolphin-css.min.css">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen text-white font-sans bg-[#070a13] selection:bg-cyan-500 selection:text-slate-900 py-12 px-6">
+  
+  <div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-extrabold tracking-tight text-white mb-2">Dolphin Client Test Suite 🐬</h1>
+      <p class="text-slate-400 text-sm">Testing auto-wire, modular component imports, and multi-store template reuse.</p>
+    </div>
+
+    <!-- Section 1: Imported Modular Component -->
+    <div class="bg-white/[0.02] border border-white/5 p-8 rounded-3xl mb-8">
+      <h2 class="text-lg font-bold text-cyan-400 mb-4">१. Imported Store & Template (via <code>data-import</code>)</h2>
+      <p class="text-slate-400 text-xs mb-6">
+        Below component is fetched from <code>components/test_counter.html</code>. 
+        It contains both a Svelte-style template and a <code>&lt;dolphin-store&gt;</code> that auto-wires itself on load.
+      </p>
+      
+      <!-- Import target -->
+      <div data-import="components/test_counter.html"></div>
+    </div>
+
+    <!-- Section 2: Reusable Shared Template (Multi-Instance) -->
+    <div class="bg-white/[0.02] border border-white/5 p-8 rounded-3xl mb-8">
+      <h2 class="text-lg font-bold text-cyan-400 mb-4">२. Shared Template Reuse (Multiple Store Instances)</h2>
+      <p class="text-slate-400 text-xs mb-6">
+        Below are two independent stores (<code>counterA</code> and <code>counterB</code>) using the same HTML <code>&lt;template id="shared-counter-template"&gt;</code> declared below.
+      </p>
+
+      <!-- Shared Template Definition -->
+      <template id="shared-counter-template">
+        <div class="p-6 bg-slate-900 border border-white/10 rounded-2xl text-center shadow-xl hover:border-cyan-500/30 transition-all duration-300">
+          <h3 class="text-xs font-extrabold tracking-wider text-cyan-400 uppercase mb-2">Local Store: {{__storeName}}</h3>
+          <div class="text-4xl font-extrabold text-white mb-4">{{count}}</div>
+          <button 
+            data-rt-click="count = count + 1" 
+            class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer">
+            Increment
+          </button>
+        </div>
+      </template>
+
+      <!-- Two instances running independently -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Instance A -->
+        <dolphin-store name="counterA" template="#shared-counter-template" count="10"></dolphin-store>
+        
+        <!-- Instance B -->
+        <dolphin-store name="counterB" template="#shared-counter-template" count="25"></dolphin-store>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load updated reactive client library -->
+  <script src="./dolphin-client.js" data-debug="true"></script>
+  <script>
+    // Initialize Dolphin Client (will automatically resolve data-import and scan stores)
+    const dolphin = new DolphinModule.DolphinClient();
+    dolphin.connect().catch(err => console.log("Offline mode: running locally without WS server connection."));
+  </script>
+</body>
+</html>

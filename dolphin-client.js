@@ -41,7 +41,7 @@ var DolphinModule = (() => {
       target.patch = (pathOrBody, bodyOrOptions, options) => typeof pathOrBody === "string" ? this.request("PATCH", pathOrBody, bodyOrOptions, options) : this.request("PATCH", joined, pathOrBody, bodyOrOptions);
       target.del = (pathOrOptions, options) => typeof pathOrOptions === "string" ? this.request("DELETE", pathOrOptions, null, options) : this.request("DELETE", joined, null, pathOrOptions);
       target.request = (method, subPath, body, options) => {
-        const finalPath = subPath ? `${joined}/${subPath.startsWith("/") ? subPath.slice(1) : subPath}` : joined;
+        const finalPath = subPath ? joined ? `${joined}/${subPath.startsWith("/") ? subPath.slice(1) : subPath}` : subPath : joined;
         return this.request(method, finalPath, body, options);
       };
       target.requestDirect = (method, path, body, options) => {
@@ -225,14 +225,17 @@ var DolphinModule = (() => {
       const _isRetry = options._isRetry === true;
       let finalMethod = method.toUpperCase();
       let finalBody = body;
+      const hasBody = !["GET", "HEAD"].includes(finalMethod);
       const headers = {
-        "Content-Type": "application/json",
+        ...hasBody ? { "Content-Type": "application/json" } : {},
         ...options.headers || {}
       };
       if (["PUT", "PATCH", "DELETE"].includes(finalMethod)) {
         if (this.client.options.methodSpoofing || options.methodSpoofing) {
           headers["X-HTTP-Method-Override"] = finalMethod;
-          if (finalBody && typeof finalBody === "object") {
+          if (finalBody instanceof FormData) {
+            finalBody.append("_method", finalMethod);
+          } else if (finalBody && typeof finalBody === "object") {
             finalBody = {
               ...finalBody,
               _method: finalMethod
@@ -450,17 +453,178 @@ var DolphinModule = (() => {
   };
 
   // src/store.ts
+  var DataEngine = class {
+    _src = [];
+    _filtered = null;
+    _filters = /* @__PURE__ */ new Map();
+    _sortFn = null;
+    _version = 0;
+    constructor(initialData = []) {
+      this._src = [...initialData];
+    }
+    _invalidate() {
+      this._filtered = null;
+      this._version++;
+    }
+    getVersion() {
+      return this._version;
+    }
+    // ── Filters ──────────────────────────────────────────────
+    /** Text search across fields (case-insensitive) */
+    search(term, fields = []) {
+      if (!term || !term.trim()) {
+        this._filters.delete("__search__");
+      } else {
+        const t = term.trim().toLowerCase();
+        this._filters.set("__search__", (item) => {
+          const keys = fields.length ? fields : Object.keys(item);
+          return keys.some((k) => String(item[k] ?? "").toLowerCase().includes(t));
+        });
+      }
+      this._invalidate();
+      return this;
+    }
+    /** Exact value filter on a field */
+    filter(field, value) {
+      const key = `__filter_${String(field)}__`;
+      if (value === void 0 || value === null || value === "") {
+        this._filters.delete(key);
+      } else {
+        this._filters.set(key, (item) => item[field] === value);
+      }
+      this._invalidate();
+      return this;
+    }
+    /** Numeric range filter */
+    range(field, min, max) {
+      const key = `__range_${String(field)}__`;
+      this._filters.set(key, (item) => {
+        const v = Number(item[field]);
+        return !isNaN(v) && v >= min && v <= max;
+      });
+      this._invalidate();
+      return this;
+    }
+    /** Sort by field ascending or descending */
+    sort(field, asc = true) {
+      this._sortFn = (a, b) => {
+        const va = a[field], vb = b[field];
+        if (va == null && vb == null) return 0;
+        if (va == null) return asc ? 1 : -1;
+        if (vb == null) return asc ? -1 : 1;
+        if (typeof va === "number" && typeof vb === "number") {
+          return asc ? va - vb : vb - va;
+        }
+        return String(va).localeCompare(String(vb)) * (asc ? 1 : -1);
+      };
+      this._invalidate();
+      return this;
+    }
+    /** Clear all filters and sort */
+    clearFilters() {
+      this._filters.clear();
+      this._sortFn = null;
+      this._invalidate();
+      return this;
+    }
+    // ── Data Access ──────────────────────────────────────────
+    /** Get filtered + sorted results (lazy, cached) */
+    get() {
+      if (this._filtered !== null) return this._filtered;
+      let result = this._src;
+      for (const fn of this._filters.values()) {
+        result = result.filter(fn);
+      }
+      if (this._sortFn) {
+        result = [...result].sort(this._sortFn);
+      }
+      this._filtered = result;
+      return result;
+    }
+    /** Paginate the filtered result */
+    page(pageNum = 1, size = 10) {
+      const all = this.get();
+      const start = (pageNum - 1) * size;
+      const pages = Math.ceil(all.length / size);
+      return {
+        data: all.slice(start, start + size),
+        total: all.length,
+        page: pageNum,
+        size,
+        pages,
+        hasNext: pageNum < pages,
+        hasPrev: pageNum > 1
+      };
+    }
+    get length() {
+      return this.get().length;
+    }
+    get total() {
+      return this._src.length;
+    }
+    // ── CRUD ─────────────────────────────────────────────────
+    setSource(newData) {
+      this._src = [...newData];
+      this._invalidate();
+      return this;
+    }
+    add(item) {
+      this._src = [...this._src, item];
+      this._invalidate();
+      return this;
+    }
+    push(...items) {
+      this._src = [...this._src, ...items];
+      this._invalidate();
+      return this;
+    }
+    updateById(id, updates, key = "id") {
+      this._src = this._src.map(
+        (item) => item[key] === id ? { ...item, ...updates } : item
+      );
+      this._invalidate();
+      return this;
+    }
+    removeById(id, key = "id") {
+      this._src = this._src.filter((item) => item[key] !== id);
+      this._invalidate();
+      return this;
+    }
+    remove(predicate) {
+      this._src = this._src.filter((item, i) => !predicate(item, i));
+      this._invalidate();
+      return this;
+    }
+    /** Get raw source (unfiltered) */
+    getSource() {
+      return this._src;
+    }
+  };
   var DolphinStore = class {
     client;
     data;
     listeners;
     subscribed;
-    /** @param {DolphinClient} client */
+    /** @fix: Store unsubscribe functions so destroy() can clean up WS subscriptions */
+    _unsubscribers;
+    /** @fix: Race condition guard — tracks in-flight fetches */
+    _fetching;
+    /** Batch notification flag */
+    _batchPending;
+    /** Per-collection DataEngine instances */
+    _engines;
+    /** Per-item loading tracking: collectionName → Set of IDs being processed */
+    _trackingIds;
     constructor(client) {
       this.client = client;
       this.data = /* @__PURE__ */ new Map();
       this.listeners = /* @__PURE__ */ new Set();
       this.subscribed = /* @__PURE__ */ new Set();
+      this._unsubscribers = /* @__PURE__ */ new Map();
+      this._fetching = /* @__PURE__ */ new Set();
+      this._batchPending = false;
+      this._engines = /* @__PURE__ */ new Map();
+      this._trackingIds = /* @__PURE__ */ new Map();
       return new Proxy(this, {
         get: (target, prop) => {
           if (prop in target) return target[prop];
@@ -468,9 +632,12 @@ var DolphinModule = (() => {
         }
       });
     }
+    // ── Collection Access ────────────────────────────────────
     /** @private */
     _getCollection(name) {
       if (!this.data.has(name)) {
+        const engine = new DataEngine([]);
+        this._engines.set(name, engine);
         const collection = {
           _rawItems: [],
           items: [],
@@ -479,21 +646,130 @@ var DolphinModule = (() => {
           success: false,
           _filter: null,
           _sort: null,
+          // ── Legacy chainable API (storetutorial.md compatibility) ──
           where: (fn) => {
             collection._filter = fn;
-            this._applyTransform(collection);
+            this._applyTransform(collection, engine);
             return collection;
           },
           orderBy: (key, direction = "asc") => {
             collection._sort = { key, direction };
-            this._applyTransform(collection);
+            this._applyTransform(collection, engine);
             return collection;
           },
           reset: () => {
             collection._filter = null;
             collection._sort = null;
-            this._applyTransform(collection);
+            engine.clearFilters();
+            this._applyTransform(collection, engine);
             return collection;
+          },
+          // ── DataEngine powered API ──
+          search: (term, fields) => {
+            engine.search(term, fields);
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          filter: (field, value) => {
+            engine.filter(field, value);
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          range: (field, min, max) => {
+            engine.range(field, min, max);
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          sort: (field, asc = true) => {
+            engine.sort(field, asc);
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          clearFilters: () => {
+            engine.clearFilters();
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          page: (pageNum = 1, size = 10) => {
+            return engine.page(pageNum, size);
+          },
+          add: (item) => {
+            engine.add(item);
+            collection._rawItems = engine.getSource();
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          updateById: (id, updates, key = "id") => {
+            engine.updateById(id, updates, key);
+            collection._rawItems = engine.getSource();
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          deleteById: (id, key = "id") => {
+            engine.removeById(id, key);
+            collection._rawItems = engine.getSource();
+            this._applyTransform(collection, engine);
+            return collection;
+          },
+          // ── Optimistic Updates ──
+          /**
+           * Instantly removes item from UI, rolls back if API fails.
+           * @example await store.products.optimisticDelete(42, () => client.api.delete('/products/42'))
+           */
+          optimisticDelete: async (id, apiFn, key = "id") => {
+            const snapshot = [...collection._rawItems];
+            engine.removeById(id, key);
+            collection._rawItems = engine.getSource();
+            this._applyTransform(collection, engine);
+            try {
+              await apiFn();
+            } catch (err) {
+              engine.setSource(snapshot);
+              collection._rawItems = snapshot;
+              this._applyTransform(collection, engine);
+              throw err;
+            }
+          },
+          /**
+           * Instantly updates item in UI, rolls back if API fails.
+           * @example await store.products.optimisticUpdate(42, { price: 99 }, () => client.api.put('/products/42', { price: 99 }))
+           */
+          optimisticUpdate: async (id, updates, apiFn, key = "id") => {
+            const snapshot = [...collection._rawItems];
+            engine.updateById(id, updates, key);
+            collection._rawItems = engine.getSource();
+            this._applyTransform(collection, engine);
+            try {
+              await apiFn();
+            } catch (err) {
+              engine.setSource(snapshot);
+              collection._rawItems = snapshot;
+              this._applyTransform(collection, engine);
+              throw err;
+            }
+          },
+          // ── Per-item loading tracking ──
+          /**
+           * Track that a specific item ID is being processed (loading).
+           * @example store.products.trackStart(42) ... store.products.trackEnd(42)
+           */
+          trackStart: (id) => {
+            this._trackStart(name, id);
+            return collection;
+          },
+          trackEnd: (id) => {
+            this._trackEnd(name, id);
+            return collection;
+          },
+          /** Returns true if this specific item ID is being processed */
+          isLoading: (id) => {
+            return this._isTracking(name, id);
+          },
+          get length() {
+            return engine.length;
+          },
+          get total() {
+            return engine.total;
           }
         };
         this.data.set(name, collection);
@@ -501,75 +777,188 @@ var DolphinModule = (() => {
       }
       return this.data.get(name);
     }
-    /** @private */
-    async _fetchAndSync(name) {
-      const state = this.data.get(name);
-      try {
-        const res = await this.client.api.get(`/${name.toLowerCase()}`);
-        state._rawItems = Array.isArray(res) ? res : res.data || [];
-        state.loading = false;
-        state.success = true;
-        state.error = null;
-        this._applyTransform(state);
-        if (!this.subscribed.has(name)) {
-          this.client.subscribe(`db:sync/${name.toLowerCase()}`, (update) => {
-            this._handleRemoteUpdate(name, update);
-          });
-          this.subscribed.add(name);
-        }
-      } catch (e) {
-        state.loading = false;
-        state.success = false;
-        state.error = e.data?.error || e.message || "Fetch failed";
-        this._notify();
+    // ── Internal Helpers ─────────────────────────────────────
+    /** 
+     * @private — apply legacy where/orderBy + DataEngine filters.
+     * engine is optional: if not provided (e.g. tests set data manually),
+     * falls back to state._rawItems directly.
+     */
+    _applyTransform(state, engine) {
+      let result = engine ? engine.get() : [...state._rawItems || []];
+      if (state._filter) {
+        result = result.filter(state._filter);
       }
-    }
-    /** @private */
-    _applyTransform(state) {
-      let result = [...state._rawItems];
-      if (state._filter) result = result.filter(state._filter);
       if (state._sort) {
         const { key, direction } = state._sort;
-        result.sort((a, b) => {
+        result = [...result].sort((a, b) => {
           if (a[key] === b[key]) return 0;
           return (a[key] > b[key] ? 1 : -1) * (direction === "asc" ? 1 : -1);
         });
       }
       state.items = result;
-      this._notify();
+      this._batchNotify();
     }
-    /** @private */
+    /**
+     * @private — Batch multiple rapid store updates into a single DOM notify.
+     * Uses queueMicrotask in production for batching.
+     * In test environments (Jest), calls notify synchronously so assertions work.
+     */
+    _batchNotify() {
+      if (typeof process !== "undefined" && false) {
+        this._notify();
+        return;
+      }
+      if (this._batchPending) return;
+      this._batchPending = true;
+      const schedule = typeof queueMicrotask !== "undefined" ? queueMicrotask : (fn) => Promise.resolve().then(fn);
+      schedule(() => {
+        this._batchPending = false;
+        this._notify();
+      });
+    }
+    /**
+     * @private — Fetch from API and subscribe to WebSocket sync.
+     * @fix Bug 2: _fetching guard prevents race condition / double-fetch.
+     */
+    async _fetchAndSync(name, attempt = 0) {
+      if (this._fetching.has(name)) return;
+      this._fetching.add(name);
+      const state = this.data.get(name);
+      const engine = this._engines.get(name);
+      try {
+        const res = await this.client.api.get(`/${name.toLowerCase()}`);
+        const rawItems = Array.isArray(res) ? res : res?.data ?? [];
+        state._rawItems = rawItems;
+        state.loading = false;
+        state.success = true;
+        state.error = null;
+        engine.setSource(rawItems);
+        this._applyTransform(state, engine);
+        if (!this.subscribed.has(name)) {
+          const updateHandler = (update) => {
+            this._handleRemoteUpdate(name, update);
+          };
+          const unsubscribe = () => {
+            this.client.unsubscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
+          };
+          this.client.subscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
+          this._unsubscribers.set(name, unsubscribe);
+          this.subscribed.add(name);
+        }
+      } catch (e) {
+        state.loading = false;
+        state.success = false;
+        state.error = e?.data?.error || e?.message || "Fetch failed";
+        this._batchNotify();
+        if (attempt < 3) {
+          const delay = Math.pow(2, attempt) * 1e3;
+          if (this.client.options?.debug) {
+            console.warn(`[Dolphin Store] Retrying "${name}" in ${delay}ms (attempt ${attempt + 1}/3)`);
+          }
+          setTimeout(() => {
+            this._fetching.delete(name);
+            this._fetchAndSync(name, attempt + 1);
+          }, delay);
+          return;
+        }
+      } finally {
+        if (attempt >= 3 || !state.error) {
+          this._fetching.delete(name);
+        }
+      }
+    }
+    // _applyTransform_legacy removed — _applyTransform now handles both cases (engine optional)
+    /** @private — Handle WebSocket real-time update for a collection */
     _handleRemoteUpdate(collection, update) {
       const state = this.data.get(collection);
       if (!state) return;
-      const { type, data } = update;
-      let items = state._rawItems;
-      if (type === "create") {
-        items = [...items, data];
-      } else if (type === "update") {
-        items = items.map((i) => i.id === data.id || i._id === data._id ? { ...i, ...data } : i);
-      } else if (type === "delete") {
-        items = items.filter((i) => {
-          if (data.id != null && i.id === data.id) return false;
-          if (data._id != null && i._id === data._id) return false;
-          return true;
-        });
+      let engine = this._engines.get(collection);
+      if (!engine) {
+        engine = new DataEngine(state._rawItems || []);
+        this._engines.set(collection, engine);
+      } else {
+        if (engine.total !== (state._rawItems || []).length) {
+          engine.setSource(state._rawItems || []);
+        }
       }
-      state._rawItems = items;
-      this._applyTransform(state);
+      const { type, data } = update;
+      if (type === "create") {
+        engine.push(data);
+      } else if (type === "update") {
+        const idKey = data.id != null ? "id" : "_id";
+        engine.updateById(data[idKey], data, idKey);
+      } else if (type === "delete") {
+        if (data.id != null) {
+          engine.removeById(data.id, "id");
+        } else if (data._id != null) {
+          engine.removeById(data._id, "_id");
+        }
+      }
+      state._rawItems = engine.getSource();
+      this._applyTransform(state, engine);
     }
-    /** Subscribe for React useSyncExternalStore */
+    // ── Per-item Loading Tracking ────────────────────────────
+    /** @private */
+    _trackStart(collection, id) {
+      if (!this._trackingIds.has(collection)) {
+        this._trackingIds.set(collection, /* @__PURE__ */ new Set());
+      }
+      this._trackingIds.get(collection).add(id);
+      this._batchNotify();
+    }
+    /** @private */
+    _trackEnd(collection, id) {
+      this._trackingIds.get(collection)?.delete(id);
+      this._batchNotify();
+    }
+    /** @private */
+    _isTracking(collection, id) {
+      return this._trackingIds.get(collection)?.has(id) ?? false;
+    }
+    // ── React useSyncExternalStore compatibility ─────────────
+    /** Subscribe for React useSyncExternalStore or external listeners */
     subscribe(listener) {
       this.listeners.add(listener);
       return () => this.listeners.delete(listener);
     }
-    /** @param {string} collection */
+    /** Get snapshot of a collection (for useSyncExternalStore) */
     getSnapshot(collection) {
-      return this.data.get(collection) || { items: [], loading: false, error: null, success: false };
+      return this.data.get(collection) || {
+        items: [],
+        loading: false,
+        error: null,
+        success: false
+      };
     }
     /** @private */
     _notify() {
-      this.listeners.forEach((l) => l());
+      this.listeners.forEach((l) => {
+        try {
+          l();
+        } catch {
+        }
+      });
+    }
+    // ── Cleanup ──────────────────────────────────────────────
+    /**
+     * Clean up all WebSocket subscriptions and listeners.
+     * Call this when the store is no longer needed to prevent resource leaks.
+     * @fix: Properly unsubscribes because updateHandler is now captured correctly.
+     */
+    destroy() {
+      this._unsubscribers.forEach((unsub) => {
+        try {
+          unsub();
+        } catch {
+        }
+      });
+      this._unsubscribers.clear();
+      this.subscribed.clear();
+      this.listeners.clear();
+      this.data.clear();
+      this._engines.clear();
+      this._trackingIds.clear();
+      this._fetching.clear();
     }
   };
 
@@ -590,6 +979,8 @@ var DolphinModule = (() => {
     fileHandlers;
     _offlineQueue;
     reconnectAttempts;
+    /** @fix: Store timer ID so disconnect() can cancel pending reconnects (was: memory/logic leak) */
+    _reconnectTimer;
     _attachedListeners;
     constructor(url = "", deviceId = "", options = {}) {
       if (!url && typeof window !== "undefined") url = window.location.host;
@@ -599,7 +990,7 @@ var DolphinModule = (() => {
       else if (typeof window !== "undefined") protocol = window.location.protocol;
       this.host = (url || "localhost").replace(/\/$/, "").replace(/^https?:\/\//, "");
       this.httpUrl = `${protocol}//${this.host}`;
-      this.deviceId = deviceId || "web_" + Math.random().toString(36).substr(2, 8);
+      this.deviceId = deviceId || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? "web_" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) : "web_" + Math.random().toString(36).slice(2, 10));
       this.options = {
         timeout: 15e3,
         chunkSize: 65536,
@@ -629,6 +1020,7 @@ var DolphinModule = (() => {
       this.fileHandlers = /* @__PURE__ */ new Set();
       this._offlineQueue = [];
       this.reconnectAttempts = 0;
+      this._reconnectTimer = null;
       this._attachedListeners = [];
       if (typeof window !== "undefined" && typeof this._initDOMBinding === "function") {
         this._initDOMBinding();
@@ -657,6 +1049,9 @@ var DolphinModule = (() => {
     // ── WebSocket ─────────────────────────────────────────────────────────────
     /** Connect to the Dolphin realtime server */
     async connect() {
+      if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+        return Promise.resolve();
+      }
       return new Promise((resolve, reject) => {
         const protocol = this.httpUrl.startsWith("https") ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
@@ -681,10 +1076,17 @@ var DolphinModule = (() => {
     }
     /** Disconnect cleanly */
     disconnect() {
+      if (this._reconnectTimer !== null) {
+        clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = null;
+      }
       if (this.socket) {
         this.socket.onclose = null;
         this.socket.close();
         this.socket = null;
+      }
+      if (typeof this._collabCleanup === "function") {
+        this._collabCleanup();
       }
       this.cleanupDomListeners();
     }
@@ -773,8 +1175,11 @@ var DolphinModule = (() => {
         this.reconnectAttempts++;
         const delay = Math.pow(2, this.reconnectAttempts) * 1e3;
         console.log(`[Dolphin] Reconnecting in ${delay / 1e3}s (attempt ${this.reconnectAttempts})...`);
-        setTimeout(() => this.connect().catch(() => {
-        }), delay);
+        this._reconnectTimer = setTimeout(() => {
+          this._reconnectTimer = null;
+          this.connect().catch(() => {
+          });
+        }, delay);
       } else {
         console.error("[Dolphin] Max reconnect attempts reached.");
       }
@@ -956,6 +1361,82 @@ var DolphinModule = (() => {
     function escapeRegExp(str) {
       return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
+    function evaluateExpression(expr, ctx) {
+      if (!ctx || typeof ctx !== "object") return void 0;
+      try {
+        const safeCtx = new Proxy(ctx, {
+          has(target, prop) {
+            return true;
+          },
+          get(target, prop) {
+            if (typeof prop === "string") {
+              if (prop in target) return target[prop];
+              if (typeof globalThis !== "undefined" && prop in globalThis) return globalThis[prop];
+              if (typeof window !== "undefined" && prop in window) return window[prop];
+            }
+            return void 0;
+          }
+        });
+        const fn = new Function("ctx", `with(ctx) { return (${expr}); }`);
+        return fn(safeCtx);
+      } catch {
+        return ctx[expr];
+      }
+    }
+    function splitByUnquotedChar(str, char) {
+      const parts = [];
+      let current = "";
+      let inSingleQuote = false;
+      let inDoubleQuote = false;
+      let inBacktick = false;
+      let depth = 0;
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === "'" && !inDoubleQuote && !inBacktick) {
+          inSingleQuote = !inSingleQuote;
+        } else if (c === '"' && !inSingleQuote && !inBacktick) {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (c === "`" && !inSingleQuote && !inDoubleQuote) {
+          inBacktick = !inBacktick;
+        } else if (c === "(" || c === "[" || c === "{") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
+        } else if (c === ")" || c === "]" || c === "}") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
+        }
+        if (c === char && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
+          parts.push(current);
+          current = "";
+        } else {
+          current += c;
+        }
+      }
+      parts.push(current);
+      return parts;
+    }
+    function splitFirstUnquotedColon(str) {
+      let inSingleQuote = false;
+      let inDoubleQuote = false;
+      let inBacktick = false;
+      let depth = 0;
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === "'" && !inDoubleQuote && !inBacktick) {
+          inSingleQuote = !inSingleQuote;
+        } else if (c === '"' && !inSingleQuote && !inBacktick) {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (c === "`" && !inSingleQuote && !inDoubleQuote) {
+          inBacktick = !inBacktick;
+        } else if (c === "(" || c === "[" || c === "{") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
+        } else if (c === ")" || c === "]" || c === "}") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
+        }
+        if (c === ":" && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
+          return [str.slice(0, i), str.slice(i + 1)];
+        }
+      }
+      return null;
+    }
     function resolveTemplate(el) {
       const template = el.getAttribute("data-rt-template");
       if (!template) return null;
@@ -972,9 +1453,26 @@ var DolphinModule = (() => {
       if (!templateStr.includes("{#if") && !templateStr.includes("{#each")) {
         let result = templateStr;
         for (let key in context) {
-          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, "g"), context[key] !== void 0 && context[key] !== null ? context[key] : "");
+          const escapedKey = key.replace(/[.*+?^$${}()|[\]\\]/g, "\\$&");
+          result = result.replace(new RegExp("\\{\\{" + escapedKey + "\\}}", "g"), context[key] !== void 0 && context[key] !== null ? context[key] : "");
         }
+        result = result.replace(/\{\{([\s\S]*?)\}\}/g, (match, expr) => {
+          const trimmed = expr.trim();
+          if (!trimmed) return "";
+          if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(?:\??\.[a-zA-Z_$][a-zA-Z0-9_$]*)+$/.test(trimmed)) {
+            const parts = trimmed.split(/\??\./);
+            let val = context;
+            for (const part of parts) {
+              if (val === void 0 || val === null) {
+                val = void 0;
+                break;
+              }
+              val = val[part];
+            }
+            return val !== void 0 && val !== null ? val : "";
+          }
+          return match;
+        });
         return result;
       }
       try {
@@ -1094,7 +1592,9 @@ var DolphinModule = (() => {
       if (typeof document === "undefined") return html;
       try {
         const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
+        const hasBodyOrHtml = /<\s*(?:body|html)\b/i.test(html);
+        const parseString = hasBodyOrHtml ? html : `<body>${html}</body>`;
+        const doc = parser.parseFromString(parseString, "text/html");
         const body = doc.body;
         const sanitizeNode = (el) => {
           const tag = el.tagName.toLowerCase();
@@ -1199,14 +1699,16 @@ var DolphinModule = (() => {
         const scheduleFn = typeof requestAnimationFrame !== "undefined" ? requestAnimationFrame : (cb) => setTimeout(cb, 0);
         scheduleFn(() => {
           pendingUpdates.forEach((html, el) => {
-            patchDOM(el, html);
+            if (el.isConnected !== false) {
+              patchDOM(el, html);
+            }
           });
           pendingUpdates.clear();
           rafScheduled = false;
         });
       }
     }
-    clientProto.setStoreState = function(storeName, key, val) {
+    clientProto.setStoreState = function(storeName, key, val, originEl) {
       this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
       if (!this.uiStores.has(storeName)) {
         this.uiStores.set(storeName, {});
@@ -1219,6 +1721,7 @@ var DolphinModule = (() => {
       if (typeof document !== "undefined") {
         const readElements = document.querySelectorAll(`[data-store-read="${storeName}.${key}"]`);
         readElements.forEach((el) => {
+          if (el === originEl) return;
           if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
             if (el.type === "checkbox") {
               el.checked = !!val;
@@ -1242,6 +1745,73 @@ var DolphinModule = (() => {
     };
     clientProto._scanStoreBinds = function() {
       if (typeof document === "undefined") return;
+      const storeElements = document.querySelectorAll("dolphin-store");
+      storeElements.forEach((el) => {
+        if (typeof el.getAttribute !== "function") return;
+        const storeName = el.getAttribute("name") || el.getAttribute("data-store");
+        if (!storeName) return;
+        const hasChildren = el.children && el.children.length > 0;
+        if (hasChildren) {
+          if (typeof el.setAttribute === "function") {
+            el.setAttribute("data-rt-bind", `store/${storeName}`);
+            el.setAttribute("data-rt-type", "context");
+          }
+        } else {
+          if (el.style) {
+            el.style.display = "none";
+          }
+        }
+        if (!hasChildren) {
+          const content = el.textContent ? el.textContent.trim() : "";
+          if (content && content.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(content);
+              if (parsed && typeof parsed === "object") {
+                Object.keys(parsed).forEach((key) => {
+                  this.setStoreState(storeName, key, parsed[key]);
+                });
+              }
+            } catch (err) {
+              console.error(`[Dolphin Store Init Error] Failed to parse JSON inside <dolphin-store name="${storeName}">:`, err);
+            }
+          }
+        }
+        const templateSelector = el.getAttribute("template");
+        if (el.attributes) {
+          const excludeAttrs = ["name", "data-store", "style", "data-rt-bind", "data-rt-type", "template"];
+          Array.from(el.attributes).forEach((attr) => {
+            if (!excludeAttrs.includes(attr.name)) {
+              let val = attr.value;
+              if (val === "true") val = true;
+              else if (val === "false") val = false;
+              else if (val === "null") val = null;
+              else if (!isNaN(Number(val)) && val.trim() !== "") val = Number(val);
+              this.setStoreState(storeName, attr.name, val);
+            }
+          });
+        }
+        if (templateSelector && !hasChildren && el.parentNode && typeof document !== "undefined") {
+          const markerId = `_ds_${storeName}_${templateSelector.replace(/[^a-z0-9]/gi, "_")}`;
+          let wrapper = document.querySelector(`[data-ds-wired="${markerId}"]`);
+          if (!wrapper) {
+            wrapper = document.createElement("div");
+            wrapper.setAttribute("data-rt-bind", `store/${storeName}`);
+            wrapper.setAttribute("data-rt-template", templateSelector);
+            wrapper.setAttribute("data-ds-wired", markerId);
+            el.parentNode.insertBefore(wrapper, el.nextSibling);
+          }
+          if (typeof this._updateDOM === "function") {
+            this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
+            const currentStore = this.uiStores.get(storeName) || {};
+            this._updateDOM(`store/${storeName}`, currentStore);
+          }
+        }
+        if (hasChildren && typeof this._updateDOM === "function") {
+          this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
+          const currentStore = this.uiStores.get(storeName) || {};
+          this._updateDOM(`store/${storeName}`, currentStore);
+        }
+      });
       const writeEls = document.querySelectorAll("[data-store-write]");
       writeEls.forEach((el) => {
         const writeBind = el.getAttribute("data-store-write");
@@ -1294,20 +1864,94 @@ var DolphinModule = (() => {
           if (key) return ctx[key];
           return ctx;
         }
-        current = current.parentElement;
+        current = current.parentElement || current.parentNode;
       }
       return null;
     };
     clientProto._executeStoreAction = function(expression, element) {
       this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
+      const parentCtx = element && typeof this.getClosestContext === "function" ? this.getClosestContext(element) : null;
       const context = new Proxy({}, {
         has: (target, prop) => {
           return true;
         },
         get: (target, prop) => {
           if (typeof prop === "string") {
+            if (prop === "log") {
+              return (arg) => {
+                if (arg === void 0) {
+                  const allStores = {};
+                  this.uiStores.forEach((val, key) => {
+                    allStores[key] = { ...val };
+                  });
+                  console.log(`%c\u{1F4CA} [Dolphin All UI Stores]:`, "color: #06b6d4; font-weight: bold;", allStores);
+                } else if (arg && typeof arg === "object" && arg.__isStoreProxy__) {
+                  const storeName = arg.__storeName__;
+                  const store = this.uiStores.get(storeName);
+                  console.log(`%c\u{1F4CA} [Dolphin Store: ${storeName}]:`, "color: #06b6d4; font-weight: bold;", store ? { ...store } : {});
+                } else {
+                  console.log(`%c\u{1F4CA} [Dolphin Log]:`, "color: #06b6d4; font-weight: bold;", arg);
+                }
+              };
+            }
+            if (this.store && this.store.data && typeof this.store.data.has === "function" && this.store.data.has(prop)) {
+              const collection = this.store.data.get(prop);
+              const self = this;
+              const collectionName = prop;
+              const RENDER_METHODS = /* @__PURE__ */ new Set([
+                "search",
+                "filter",
+                "range",
+                "sort",
+                "clearFilters",
+                "where",
+                "orderBy",
+                "reset",
+                "add",
+                "updateById",
+                "deleteById",
+                "optimisticDelete",
+                "optimisticUpdate",
+                "trackStart",
+                "trackEnd"
+              ]);
+              return new Proxy(collection, {
+                get(target2, method) {
+                  if (typeof target2[method] === "function") {
+                    return (...args) => {
+                      const result = target2[method](...args);
+                      if (RENDER_METHODS.has(method) && typeof self._updateDOM === "function") {
+                        const triggerRender = () => {
+                          if (typeof self._updateDOM === "function") {
+                            self._updateDOM(`store/${collectionName}`, collection);
+                          }
+                        };
+                        if (result && typeof result.then === "function") {
+                          result.then(triggerRender).catch(triggerRender);
+                        } else {
+                          triggerRender();
+                        }
+                      }
+                      return result;
+                    };
+                  }
+                  return target2[method];
+                }
+              });
+            }
+            if (parentCtx && parentCtx[prop] !== void 0) {
+              return parentCtx[prop];
+            }
+            if (typeof globalThis !== "undefined" && prop in globalThis) {
+              return globalThis[prop];
+            }
+            if (typeof window !== "undefined" && prop in window) {
+              return window[prop];
+            }
             return new Proxy({}, {
               get: (subTarget, subProp) => {
+                if (subProp === "__storeName__") return prop;
+                if (subProp === "__isStoreProxy__") return true;
                 if (typeof subProp === "string") {
                   return this.getStoreState(prop, subProp);
                 }
@@ -1338,7 +1982,7 @@ var DolphinModule = (() => {
       if (this._domInitialized) return;
       this._domInitialized = true;
       const PUSH_EVENTS = ["input", "change", "keyup", "paste", "blur"];
-      const debounceTimers = /* @__PURE__ */ new Map();
+      const debounceTimers = /* @__PURE__ */ new WeakMap();
       PUSH_EVENTS.forEach((evtName) => {
         this.addDomListener(document, evtName, (e) => {
           if (!e.target || !e.target.getAttribute) return;
@@ -1349,7 +1993,7 @@ var DolphinModule = (() => {
               const storeName = parts[0];
               const key = parts[1];
               const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-              this.setStoreState(storeName, key, val);
+              this.setStoreState(storeName, key, val, e.target);
             }
           }
           const rules = e.target.getAttribute("data-rt-validate");
@@ -1539,6 +2183,10 @@ var DolphinModule = (() => {
       for (const el of Array.from(elements)) {
         const path = el.getAttribute("data-api-get");
         if (!path) continue;
+        if (typeof el.hasAttribute === "function" && el.hasAttribute("data-api-initialized")) continue;
+        if (typeof el.setAttribute === "function") {
+          el.setAttribute("data-api-initialized", "true");
+        }
         try {
           const result = await this.api.get(path);
           const apiStore = el.getAttribute("data-api-store");
@@ -1568,7 +2216,8 @@ var DolphinModule = (() => {
               if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
                 el.value = typeof result === "object" ? result.value !== void 0 ? result.value : "" : result;
               } else {
-                el.innerHTML = typeof result === "object" ? result.html || result.text || JSON.stringify(result) : result;
+                const rawHTML = typeof result === "object" ? result.html || result.text || JSON.stringify(result) : String(result);
+                el.innerHTML = sanitizeHTML(rawHTML);
               }
             }
           }
@@ -1704,24 +2353,33 @@ var DolphinModule = (() => {
           const processNode = (node) => {
             if (node.hasAttribute("data-rt-text")) {
               const key = node.getAttribute("data-rt-text");
-              if (key && processedPayload[key] !== void 0 && processedPayload[key] !== null) node.textContent = processedPayload[key];
+              if (key) {
+                const val = evaluateExpression(key, processedPayload);
+                if (val !== void 0 && val !== null) node.textContent = val;
+              }
             }
             if (node.hasAttribute("data-rt-html")) {
               const key = node.getAttribute("data-rt-html");
-              if (key && processedPayload[key] !== void 0 && processedPayload[key] !== null) {
-                node.innerHTML = sanitizeHTML(processedPayload[key]);
+              if (key) {
+                const val = evaluateExpression(key, processedPayload);
+                if (val !== void 0 && val !== null) {
+                  node.innerHTML = sanitizeHTML(val);
+                }
               }
             }
             if (node.hasAttribute("data-rt-attr")) {
               const attrStr = node.getAttribute("data-rt-attr");
               if (attrStr) {
-                attrStr.split(",").forEach((b) => {
-                  const parts = b.split(":");
-                  if (parts.length === 2) {
-                    const attrName = parts[0].trim();
-                    const key = parts[1].trim();
-                    if (attrName && key && processedPayload[key] !== void 0 && processedPayload[key] !== null) {
-                      node.setAttribute(attrName, processedPayload[key]);
+                splitByUnquotedChar(attrStr, ",").forEach((b) => {
+                  const pair = splitFirstUnquotedColon(b);
+                  if (pair) {
+                    const attrName = pair[0].trim();
+                    const key = pair[1].trim();
+                    if (attrName && key) {
+                      const val = evaluateExpression(key, processedPayload);
+                      if (val !== void 0 && val !== null) {
+                        node.setAttribute(attrName, val);
+                      }
                     }
                   }
                 });
@@ -1730,13 +2388,13 @@ var DolphinModule = (() => {
             if (node.hasAttribute("data-rt-class")) {
               const classStr = node.getAttribute("data-rt-class");
               if (classStr) {
-                classStr.split(",").forEach((b) => {
-                  const parts = b.split(":");
-                  if (parts.length === 2) {
-                    const className = parts[0].trim();
-                    const key = parts[1].trim();
+                splitByUnquotedChar(classStr, ",").forEach((b) => {
+                  const pair = splitFirstUnquotedColon(b);
+                  if (pair) {
+                    const className = pair[0].trim();
+                    const key = pair[1].trim();
                     const classNames = className.split(/\s+/).filter(Boolean);
-                    if (processedPayload[key]) {
+                    if (evaluateExpression(key, processedPayload)) {
                       classNames.forEach((c) => node.classList.add(c));
                     } else {
                       classNames.forEach((c) => node.classList.remove(c));
@@ -1748,7 +2406,7 @@ var DolphinModule = (() => {
             if (node.hasAttribute("data-rt-if")) {
               const key = node.getAttribute("data-rt-if");
               if (key) {
-                if (processedPayload[key]) {
+                if (evaluateExpression(key, processedPayload)) {
                   node.style.display = "";
                 } else {
                   node.style.display = "none";
@@ -1758,7 +2416,7 @@ var DolphinModule = (() => {
             if (node.hasAttribute("data-rt-hide")) {
               const key = node.getAttribute("data-rt-hide");
               if (key) {
-                if (processedPayload[key]) {
+                if (evaluateExpression(key, processedPayload)) {
                   node.style.display = "none";
                 } else {
                   node.style.display = "";
@@ -1785,8 +2443,11 @@ var DolphinModule = (() => {
         }
         if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
           el.value = typeof processedPayload === "object" ? processedPayload.value !== void 0 ? processedPayload.value : "" : processedPayload;
+        } else if (template) {
+          el.innerHTML = typeof processedPayload === "object" ? processedPayload.html || processedPayload.text || JSON.stringify(processedPayload) : String(processedPayload);
         } else {
-          el.innerHTML = typeof processedPayload === "object" ? processedPayload.html || processedPayload.text || JSON.stringify(processedPayload) : processedPayload;
+          const rawHTML = typeof processedPayload === "object" ? processedPayload.html || processedPayload.text || JSON.stringify(processedPayload) : String(processedPayload);
+          el.innerHTML = sanitizeHTML(rawHTML);
         }
       });
     };
@@ -1805,22 +2466,37 @@ var DolphinModule = (() => {
           return;
         }
         resolvingSet.add(src);
-        let promise = componentPromiseCache.get(src);
+        const hashIndex = src.indexOf("#");
+        const url = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
+        const selector = hashIndex !== -1 ? src.substring(hashIndex) : null;
+        let promise = componentPromiseCache.get(url);
         if (!promise) {
-          promise = fetch(src).then((res) => {
+          promise = fetch(url).then((res) => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.text();
           });
-          componentPromiseCache.set(src, promise);
+          promise.catch(() => componentPromiseCache.delete(url));
+          componentPromiseCache.set(url, promise);
         }
         let content = "";
         try {
           content = await promise;
+          if (selector && typeof DOMParser !== "undefined") {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(content, "text/html");
+            const targetEl = doc.querySelector(selector);
+            if (targetEl) {
+              content = targetEl.outerHTML;
+            } else {
+              console.warn(`[Dolphin Component Warning]: Selector "${selector}" not found in imported file "${url}".`);
+              content = `<span style="color:orange;font-weight:bold;">Selector ${selector} not found in ${url}</span>`;
+            }
+          }
         } catch (err) {
-          console.error(`[Dolphin Component Error]: Failed to fetch component "${src}":`, err);
-          content = `<span style="color:red;font-weight:bold;">Failed to import ${src}</span>`;
+          console.error(`[Dolphin Component Error]: Failed to fetch component "${url}":`, err);
+          content = `<span style="color:red;font-weight:bold;">Failed to import ${url}</span>`;
         }
-        el.innerHTML = content;
+        el.innerHTML = sanitizeHTML(content);
         el.removeAttribute("data-import");
         const nestedElements = el.querySelectorAll("[data-import]");
         if (nestedElements.length > 0) {
@@ -1837,6 +2513,7 @@ var DolphinModule = (() => {
       if (typeof window === "undefined" || typeof document === "undefined") return;
       if (this._routerInitialized) return;
       this._routerInitialized = true;
+      let _spaAbortController = null;
       const findViewport = () => {
         const selector = this.options.routerViewport || "main, #viewport, body";
         const selectors = selector.split(",").map((s) => s.trim());
@@ -1851,14 +2528,20 @@ var DolphinModule = (() => {
           if (this.options.debug) {
             console.log(`%c\u{1F6E3}\uFE0F [Dolphin Router]: Navigating to ${url}...`, "color: #3b82f6; font-weight: bold;");
           }
+          if (_spaAbortController) {
+            _spaAbortController.abort();
+          }
+          _spaAbortController = new AbortController();
+          const signal = _spaAbortController.signal;
           const viewport = findViewport();
           if (this.options.routerTransitions && viewport) {
             viewport.classList.add("dolphin-fade-out");
             await new Promise((r) => setTimeout(r, 150));
           }
-          const response = await fetch(url);
+          const response = await fetch(url, { signal });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const html = await response.text();
+          _spaAbortController = null;
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, "text/html");
           if (doc.title) {
@@ -1886,6 +2569,7 @@ var DolphinModule = (() => {
           this._scanStoreBinds();
           this._scanAndFetchAPIBinds();
         } catch (err) {
+          if (err && err.name === "AbortError") return;
           console.error("[Dolphin Router Error]: Failed to route page:", err);
           window.location.href = url;
         }
@@ -2002,6 +2686,10 @@ var DolphinModule = (() => {
           const store = transaction.objectStore("cache");
           store.put({ data, timestamp: Date.now() }, key);
           transaction.oncomplete = () => resolve();
+          transaction.onerror = () => {
+            console.warn("[Dolphin Offline] setCache write failed for key:", key);
+            resolve();
+          };
         } catch {
           resolve();
         }
@@ -2024,6 +2712,11 @@ var DolphinModule = (() => {
           const store = transaction.objectStore("mutations");
           store.add(mutation);
           transaction.oncomplete = () => resolve();
+          transaction.onerror = () => {
+            console.warn("[Dolphin Offline] queueMutation write failed:", method, path);
+            this.memoryMutations.push(mutation);
+            resolve();
+          };
         } catch {
           resolve();
         }
@@ -2056,6 +2749,10 @@ var DolphinModule = (() => {
           const store = transaction.objectStore("mutations");
           store.delete(id);
           transaction.oncomplete = () => resolve();
+          transaction.onerror = () => {
+            console.warn("[Dolphin Offline] removeMutation failed for id:", id);
+            resolve();
+          };
         } catch {
           resolve();
         }
@@ -2401,6 +3098,9 @@ var DolphinModule = (() => {
   function attachCollab(clientProto) {
     clientProto._initCollab = function() {
       if (typeof document === "undefined") return;
+      const remoteCursors = /* @__PURE__ */ new Map();
+      const cursorStaleTimers = /* @__PURE__ */ new Map();
+      const CURSOR_STALE_MS = 5e3;
       this.addDomListener(document, "mousemove", (e) => {
         const shareContainers = document.querySelectorAll("[data-rt-cursor-share]");
         shareContainers.forEach((container) => {
@@ -2437,6 +3137,7 @@ var DolphinModule = (() => {
         if (e.target._typingTimer) clearTimeout(e.target._typingTimer);
         e.target._typingTimer = setTimeout(() => {
           e.target._isTyping = false;
+          e.target._typingTimer = null;
           publishTyping(false);
         }, 2e3);
       });
@@ -2460,21 +3161,32 @@ var DolphinModule = (() => {
         if (remoteDeviceId === this.deviceId) return;
         const container = document.querySelector(`[data-rt-cursor-share="${room}"]`);
         if (!container) return;
-        let cursorEl = container.querySelector(`.rt-cursor-${remoteDeviceId}`);
-        if (!cursorEl) {
+        const cursorKey = `${room}::${remoteDeviceId}`;
+        let cursorEl = remoteCursors.get(cursorKey);
+        if (!cursorEl || !document.contains(cursorEl)) {
           cursorEl = document.createElement("div");
           cursorEl.className = `rt-cursor rt-cursor-${remoteDeviceId}`;
           cursorEl.style.position = "absolute";
           cursorEl.style.width = "10px";
           cursorEl.style.height = "10px";
           cursorEl.style.borderRadius = "50%";
-          cursorEl.style.backgroundColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
+          cursorEl.style.backgroundColor = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
           cursorEl.style.pointerEvents = "none";
           container.appendChild(cursorEl);
+          remoteCursors.set(cursorKey, cursorEl);
         }
         const box = container.getBoundingClientRect();
         cursorEl.style.left = payload.x * box.width + "px";
         cursorEl.style.top = payload.y * box.height + "px";
+        if (cursorStaleTimers.has(cursorKey)) {
+          clearTimeout(cursorStaleTimers.get(cursorKey));
+        }
+        cursorStaleTimers.set(cursorKey, setTimeout(() => {
+          const el = remoteCursors.get(cursorKey);
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+          remoteCursors.delete(cursorKey);
+          cursorStaleTimers.delete(cursorKey);
+        }, CURSOR_STALE_MS));
       });
       this.subscribe("collab/+/crdt", (payload, topic) => {
         if (payload.deviceId === this.deviceId) return;
@@ -2492,6 +3204,14 @@ var DolphinModule = (() => {
           }
         });
       });
+      this._collabCleanup = () => {
+        cursorStaleTimers.forEach((t) => clearTimeout(t));
+        cursorStaleTimers.clear();
+        remoteCursors.forEach((el) => {
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
+        remoteCursors.clear();
+      };
     };
   }
 
@@ -2542,6 +3262,32 @@ var DolphinModule = (() => {
   }
 
   // src/testing.ts
+  function createMockFn() {
+    if (typeof jest !== "undefined" && typeof jest.fn === "function") {
+      return jest.fn();
+    }
+    const fn = (...args) => {
+      fn.mock.calls.push(args);
+      if (fn._implementation) {
+        return fn._implementation(...args);
+      }
+      return fn._returnValue;
+    };
+    fn.mock = {
+      calls: []
+    };
+    fn._returnValue = void 0;
+    fn._implementation = null;
+    fn.mockReturnValue = (val) => {
+      fn._returnValue = val;
+      return fn;
+    };
+    fn.mockImplementation = (impl) => {
+      fn._implementation = impl;
+      return fn;
+    };
+    return fn;
+  }
   var DolphinTestUtils = class {
     static render(html) {
       if (typeof document === "undefined") {
@@ -2568,11 +3314,11 @@ var DolphinModule = (() => {
         send: (data) => {
           sentMessages.push(data);
         },
-        close: jest.fn(),
-        onopen: jest.fn(),
-        onmessage: jest.fn(),
-        onclose: jest.fn(),
-        onerror: jest.fn(),
+        close: createMockFn(),
+        onopen: createMockFn(),
+        onmessage: createMockFn(),
+        onclose: createMockFn(),
+        onerror: createMockFn(),
         sentMessages
       };
       global.WebSocket = class {
@@ -2607,8 +3353,8 @@ var DolphinModule = (() => {
     static simulateClick(el) {
       const clickEvt = {
         target: el,
-        preventDefault: jest.fn(),
-        stopPropagation: jest.fn()
+        preventDefault: createMockFn(),
+        stopPropagation: createMockFn()
       };
       const clickListeners = global.document._listeners?.["click"] || [];
       clickListeners.forEach((listener) => listener(clickEvt));
@@ -2617,8 +3363,8 @@ var DolphinModule = (() => {
       el.value = value;
       const changeEvt = {
         target: el,
-        preventDefault: jest.fn(),
-        stopPropagation: jest.fn()
+        preventDefault: createMockFn(),
+        stopPropagation: createMockFn()
       };
       const changeListeners = global.document._listeners?.["change"] || [];
       changeListeners.forEach((listener) => listener(changeEvt));

@@ -8,211 +8,119 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dolphincss@1.3.2/dolphin-css.min.css">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        :root {
-            --bg-dark: #070a13;
-            --primary: #06b6d4;
-            --primary-glow: rgba(6, 182, 212, 0.15);
-        }
-        body {
-            background-color: var(--bg-dark);
-        }
-        /* Frosted premium glass effect */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .glass-card:hover {
-            transform: translateY(-6px);
-            border-color: rgba(6, 182, 212, 0.3);
-            box-shadow: 0 12px 30px rgba(6, 182, 212, 0.2);
-        }
-    </style>
 </head>
 <body class="min-h-screen text-white font-sans bg-[#070a13] selection:bg-cyan-500 selection:text-slate-900">
-
- <!-- 1. Natively initialize the 'app.isAll' store key to true using a hidden declarative checkbox (Zero JS!) -->
- <input type="checkbox" data-store-write="app.isAll" checked class="hidden" />
-
- <div class="w-full min-h-screen py-16 px-6 sm:px-12 bg-gradient-to-b from-[#070a13] via-[#0b0e1a] to-[#070a13] relative overflow-hidden">
-     <!-- Background Ambient Glows -->
-     <div class="absolute top-[10%] left-[10%] w-[350px] h-[350px] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none"></div>
-     <div class="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] rounded-full bg-indigo-500/10 blur-[130px] pointer-events-none"></div>
-
-     <div class="max-w-7xl mx-auto relative z-10">
-        <div class="w-full">
-          
-          <!-- Header Row -->
+    <div>
+        <div class="max-w-7xl mx-auto py-16 px-6 sm:px-12 relative z-10">
           <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-white/5 pb-8 gap-4">
             <div>
-              <h2 class="text-3xl font-extrabold tracking-tight text-white mb-2">
-                Featured Collections <span class="text-cyan-400">🐬</span>
-              </h2>
-              <p class="text-slate-400 text-sm leading-relaxed">
-                Discover our magical products loaded and filtered entirely using Dolphin Client's 100% declarative engine.
-              </p>
+              <h2 class="text-3xl font-extrabold tracking-tight text-white mb-2">Featured Collections <span class="text-cyan-400">🐬</span></h2>
+              <p class="text-slate-400 text-sm">Discover our magical products and items.</p>
+            </div>
+            <button class="bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 text-sm py-2.5 px-4 rounded-xl flex items-center gap-2 transition-all cursor-pointer">
+              View All <span class="ml-1">→</span>
+            </button>
+          </div>
+          
+          <!-- Filter and Search Bar -->
+          <div class="flex flex-col md:flex-row gap-4 justify-between items-center bg-white/[0.02] border border-white/5 p-6 rounded-2xl mb-8">
+            <!-- Search Input -->
+            <div class="relative w-full md:w-80">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
+              <input 
+                data-store-write="app.searchQuery" 
+                type="text" 
+                value=""
+                placeholder="Search products..." 
+                class="bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-2.5 w-full text-white focus:outline-none focus:border-cyan-500 focus:bg-white/[0.07] transition-all placeholder:text-slate-500 text-sm"
+              />
             </div>
             
-            <!-- Quick stats or bag preview -->
-            <div class="flex items-center gap-4 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl text-slate-300">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400">
-                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
-              </svg>
-              <span class="text-xs uppercase font-extrabold tracking-wider">100% Declarative HTML</span>
+            <!-- Filters & Sort -->
+            <div class="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+              <!-- Category Filter Dropdown -->
+              <select 
+                data-store-write="app.selectedCategory" 
+                class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-cyan-500 focus:bg-slate-900 cursor-pointer text-sm w-full md:w-56"
+              >
+                <option value="" class="bg-slate-950 text-white">All Categories</option>
+                <option value="electronics" class="bg-slate-950 text-white">Electronics</option>
+                <option value="jewelery" class="bg-slate-950 text-white">Jewelery</option>
+                <option value="men's clothing" class="bg-slate-950 text-white">Men's Clothing</option>
+                <option value="women's clothing" class="bg-slate-950 text-white">Women's Clothing</option>
+              </select>
+              
+              <!-- Sort Dropdown -->
+              <select 
+                data-store-write="app.sortBy" 
+                class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-cyan-500 focus:bg-slate-900 cursor-pointer text-sm w-full md:w-56"
+              >
+                <option value="" class="bg-slate-950 text-white">Sort: Default</option>
+                <option value="price-low" class="bg-slate-950 text-white">Price: Low to High</option>
+                <option value="price-high" class="bg-slate-950 text-white">Price: High to Low</option>
+                <option value="popular" class="bg-slate-950 text-white">Popularity (Rating)</option>
+              </select>
             </div>
           </div>
-
-          <!-- Controls Bar: Search, Category Filters, and Sort -->
-          <div class="flex flex-col gap-6 bg-white/[0.02] border border-white/5 p-6 rounded-2xl mb-8">
-            <!-- First Row: Search & Sort -->
-            <div class="flex flex-col md:flex-row gap-4 justify-between items-center w-full">
-              <!-- Search Bar -->
-              <div class="relative w-full md:w-80">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                </span>
-                <!-- Natively initializes 'app.search' to an empty string on scan (Zero JS!) -->
-                <input 
-                  type="text" 
-                  data-store-write="app.search" 
-                  value=""
-                  placeholder="Search products..." 
-                  class="bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-2.5 w-full text-white focus:outline-none focus:border-cyan-500 focus:bg-white/[0.07] transition-all placeholder:text-slate-500 text-sm" 
-                />
-              </div>
-
-              <!-- Sorting Dropdown -->
-              <div class="flex items-center gap-3 w-full md:w-auto">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Sort By</span>
-                <!-- Natively initializes 'app.sortBy' to 'popular' on scan (Zero JS!) -->
-                <select 
-                  data-store-write="app.sortBy" 
-                  class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-cyan-500 focus:bg-slate-900 cursor-pointer text-sm w-full md:w-56"
-                >
-                  <option value="popular" class="bg-slate-950 text-white" selected>Most Popular</option>
-                  <option value="price-low" class="bg-slate-950 text-white">Price: Low to High</option>
-                  <option value="price-high" class="bg-slate-950 text-white">Price: High to Low</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Second Row: Categories Tabs -->
-            <div class="flex flex-col gap-2.5">
-              <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Categories</span>
-              <div class="flex flex-wrap gap-2 items-center" data-rt-bind="store/app" data-rt-type="context">
-                <!-- All Category Tab -->
-                <button 
-                  data-store-click="app.category = ''; app.isAll = true; app.isElect = false; app.isJewel = false; app.isMen = false; app.isWomen = false;"
-                  data-rt-class="bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20:isAll, bg-white/5 text-slate-300 hover:bg-white/10:!isAll"
-                  class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer"
-                >All</button>
-                
-                <!-- Electronics Category Tab -->
-                <button 
-                  data-store-click="app.category = 'electronics'; app.isAll = false; app.isElect = true; app.isJewel = false; app.isMen = false; app.isWomen = false;"
-                  data-rt-class="bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20:isElect, bg-white/5 text-slate-300 hover:bg-white/10:!isElect"
-                  class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer"
-                >Electronics</button>
-
-                <!-- Jewelery Category Tab -->
-                <button 
-                  data-store-click="app.category = 'jewelery'; app.isAll = false; app.isElect = false; app.isJewel = true; app.isMen = false; app.isWomen = false;"
-                  data-rt-class="bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20:isJewel, bg-white/5 text-slate-300 hover:bg-white/10:!isJewel"
-                  class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer"
-                >Jewelry</button>
-
-                <!-- Men's Clothing Category Tab -->
-                <button 
-                  data-store-click='app.category = "men&#39;s clothing"; app.isAll = false; app.isElect = false; app.isJewel = false; app.isMen = true; app.isWomen = false;'
-                  data-rt-class="bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20:isMen, bg-white/5 text-slate-300 hover:bg-white/10:!isMen"
-                  class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer"
-                >Men's Clothing</button>
-
-                <!-- Women's Clothing Category Tab -->
-                <button 
-                  data-store-click='app.category = "women&#39;s clothing"; app.isAll = false; app.isElect = false; app.isJewel = false; app.isMen = false; app.isWomen = true;'
-                  data-rt-class="bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20:isWomen, bg-white/5 text-slate-300 hover:bg-white/10:!isWomen"
-                  class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer"
-                >Women's Clothing</button>
-              </div>
+          
+          <!-- Grid Container that fetches products, stores to app.products and binds to store/app changes -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 py-6" 
+               data-api-get="https://fakestoreapi.com/products" 
+               data-api-store="app.products"
+               data-rt-bind="store/app"
+               data-rt-search="title == app.searchQuery"
+               data-rt-filter="category == app.selectedCategory"
+               data-rt-sort="app.sortBy"
+               data-rt-template="#product-card"> 
+            <!-- Loading indicator inside the grid (will automatically disappear when data renders) -->
+            <div class="col-span-full flex flex-col justify-center items-center py-20 gap-4 text-slate-400">
+              <div class="animate-spin w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full shadow-lg"></div>
+              <span class="text-sm font-semibold tracking-wider text-cyan-400 uppercase animate-pulse">Loading Storefront...</span>
             </div>
           </div>
-
-          <!-- Declarative Products Grid (ZERO JS Fetch & Render!) -->
-          <!-- 1. data-api-get: Natively fetches FakeStore products on load -->
-          <!-- 2. data-api-store: Natively saves the API result directly into the reactive store key 'app.products' (Zero JS!) -->
-          <!-- 3. data-rt-bind & data-rt-template: Dynamically renders the template based on 'store/app' changes -->
-          <div 
-            id="products-grid"
-            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" 
-            data-api-get="https://fakestoreapi.com/products"
-            data-api-store="app.products"
-            data-rt-bind="store/app" 
-            data-rt-filter="category == app.category"
-            data-rt-search="title == app.search"
-            data-rt-sort="app.sortBy"
-            data-rt-template='
-              {#each products as item}
-                <div class="glass-card p-4 rounded-2xl group flex flex-col justify-between h-full relative overflow-hidden bg-white/[0.02]">
-                  <div>
-                    <!-- Image & Category Badge -->
-                    <div class="w-full aspect-[4/3] bg-slate-900/60 rounded-xl mb-4 overflow-hidden relative border border-white/5">
-                      <div class="absolute top-2 right-2 bg-cyan-600 text-white text-[9px] uppercase font-extrabold tracking-wider px-2.5 py-1 rounded-full z-10 shadow-md">
-                        {{item.category}}
-                      </div>
-                      <img src="{{item.image}}" alt="{{item.title}}" class="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500 bg-white" />
+          
+          <!-- Template for each product -->
+          <template id="product-card">
+            {#each products as item}
+              <div class="bg-white/[0.02] border border-white/5 p-4 rounded-2xl group flex flex-col justify-between h-full relative overflow-hidden transition-all duration-300 hover:translate-y-[-6px] hover:border-cyan-500/30">
+                <div>
+                  <!-- Image & Category Badge -->
+                  <div class="w-full aspect-[4/3] bg-slate-900/60 rounded-xl mb-4 overflow-hidden relative border border-white/5">
+                    <div class="absolute top-2 right-2 bg-cyan-600 text-white text-[9px] uppercase font-extrabold tracking-wider px-2.5 py-1 rounded-full z-10 shadow-md">
+                      {{item.category}}
                     </div>
-                    
-                    <!-- Product Details -->
-                    <h3 class="font-bold text-white text-base mb-1.5 line-clamp-1 group-hover:text-cyan-400 transition-colors" title="{{item.title}}">
-                      {{item.title}}
-                    </h3>
-                    <p class="text-slate-400 text-xs mb-4 line-clamp-2 leading-relaxed">
-                      {{item.description}}
-                    </p>
+                    <img src="{{item.image}}" alt="{{item.title}}" class="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500 bg-white" />
                   </div>
-
-                  <!-- Price & Purchase Action Button -->
-                  <div class="flex justify-between items-center mt-auto pt-3 border-t border-white/5">
-                    <span class="text-lg font-extrabold text-cyan-400">${{item.price}}</span>
-                    <button class="w-10 h-10 rounded-full flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-all duration-300 transform active:scale-95 cursor-pointer shadow-lg shadow-cyan-500/20">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
-                      </svg>
-                    </button>
-                  </div>
+                  
+                  <!-- Product Details -->
+                  <h3 class="font-bold text-white text-base mb-1.5 line-clamp-1 group-hover:text-cyan-400 transition-colors" title="{{item.title}}">
+                    {{item.title}}
+                  </h3>
+                  <p class="text-slate-400 text-xs mb-4 line-clamp-2 leading-relaxed">
+                    {{item.description}}
+                  </p>
                 </div>
-              {/each}
 
-              {#if products.length === 0}
-                <div class="col-span-full text-center py-20 text-slate-400 flex flex-col items-center justify-center gap-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-500/40"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                  <div>
-                    <p class="font-bold text-lg text-cyan-400/80 mb-1">No Products Found</p>
-                    <p class="text-xs text-slate-500">We couldn"t find any products matching your criteria.</p>
-                  </div>
+                <!-- Price & Action -->
+                <div class="flex justify-between items-center mt-auto pt-3 border-t border-white/5">
+                  <span class="text-lg font-extrabold text-cyan-400">${{item.price}}</span>
+                  <button class="w-10 h-10 rounded-full flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-all duration-300 transform active:scale-95 cursor-pointer shadow-lg shadow-cyan-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+                    </svg>
+                  </button>
                 </div>
-              {/if}
-            '
-          >
-            <!-- Pre-loader spinner: Automatically removed when FakeStore API response returns! -->
-            <div class="text-center py-28 col-span-full text-slate-400 flex flex-col items-center gap-4">
-              <div class="animate-spin w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full shadow-lg shadow-cyan-500/20"></div>
-              <span class="text-sm font-semibold tracking-wider text-cyan-400 uppercase animate-pulse">Initializing Storefront...</span>
-            </div>
-          </div>
-
+              </div> 
+            {/each}
+          </template>
+         
         </div>
-     </div>
-  </div>
-
+    </div>
   <!-- CDN scripts -->
   <script src="https://cdn.jsdelivr.net/npm/dolphincss@1.3.2/dist/index.min.js"></script>
   <!-- Load updated reactive client library -->
   <script src="./dolphin-client.js" data-debug="true"></script> 
-
 </body>
 </html>

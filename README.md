@@ -94,6 +94,30 @@ Inside your HTML, simply link them locally:
 
 ---
 
+## 🧠 VS Code Autocomplete (IntelliSense)
+
+Get instant HTML attribute suggestions for all Dolphin Client attributes (`data-api-get`, `data-rt-click`, `data-store-write`, etc.) directly inside VS Code!
+
+### For NPM Users
+Autocomplete is set up **automatically** when you install:
+```bash
+npm install dolphin-client
+```
+That's it! Reload VS Code window (`Ctrl + Shift + P` → `Developer: Reload Window`) and start typing `data-` to see suggestions.
+
+### For CDN / Direct Download Users
+Run this **one-time command** inside your project folder:
+```bash
+npx dolphin-client
+```
+
+This will automatically generate `.vscode/settings.json` and `.vscode/dolphin-tags.json` in your project, enabling full HTML attribute autocomplete in VS Code.
+
+> [!TIP]
+> After running the command, reload VS Code (`Ctrl + Shift + P` → `Developer: Reload Window`) to activate autocomplete. You only need to run this **once per project**!
+
+---
+
 ## Interactive Examples Guide
 
 Below are clean, ready-to-use HTML examples for the core features of Dolphin Client. Because Dolphin supports **Zero-Configuration Auto-Initialization**, these will run instantly!
@@ -154,8 +178,9 @@ Apply strong validation rules to inputs and display errors directly in the UI wi
 ```
 
 ### 4. Global State & Declarative Store Actions (No-JS Actions!)
-Manage local stores and run complex calculations, conditions, and toggles **directly in HTML attributes**:
+Manage local stores, calculate math, toggle boolean logic, and run database collection operations **directly in HTML attributes**:
 
+#### UI State Management:
 ```html
 <!-- 1. Auto-sync inputs directly into store key 'app.username' -->
 <input data-store-write="app.username" placeholder="Type name..." />
@@ -169,34 +194,77 @@ Manage local stores and run complex calculations, conditions, and toggles **dire
   <button data-store-click="app.count = (app.count || 0) - 1">-</button>
 </div>
 
-<!-- 3. Complex Calculations (e.g. Area & Billing) -->
-<button data-store-click="
-  app.area = 3.14159 * (app.radius * app.radius);
-  app.circumference = 2 * 3.14159 * app.radius
-">
-  Calculate Circle
-</button>
-
-<!-- 4. Logic Toggles (e.g. Dark Mode Toggle) -->
+<!-- 3. Complex Calculations & Toggles -->
+<button data-store-click="app.area = 3.14159 * (app.radius * app.radius)">Calculate Area</button>
 <button data-store-click="app.darkMode = !app.darkMode">Toggle Dark Mode</button>
 ```
 
+#### Database Store CRUD & Filters (New in v2.0!):
+```html
+<!-- 1. Initialize or sync the database collection -->
+<dolphin-store name="products"></dolphin-store>
+
+<!-- 2. Search and filter the collection directly from HTML inputs -->
+<input placeholder="Search products..." data-store-input="products.search(this.value)" />
+
+<select data-store-change="products.filter('category', this.value)">
+  <option value="">All Categories</option>
+  <option value="electronics">Electronics</option>
+</select>
+
+<!-- 3. Trigger sorting or reset filters -->
+<button data-store-click="products.sort('price', false)">Sort by Price Desc</button>
+<button data-store-click="products.clearFilters()">Reset</button>
+
+<!-- 4. Execute database mutations (DOM updates automatically!) -->
+<div data-rt-bind="store/products" data-rt-template="#product-list"></div>
+<template id="product-list">
+  {#each items as item}
+    <div>
+      <span>{{item.name}}</span>
+      <button data-store-click="products.deleteById(item.id)">Delete</button>
+    </div>
+  {/each}
+</template>
+```
+
 ### 5. JavaScript Store API & React Integration
-Query and filter dynamic collections programmatically in JS or sync them with React without state hooks:
+Query and filter dynamic database collections programmatically in JS, run optimistic updates, track loading state, or sync with React with zero state hooks:
 
 ```javascript
 // Access the reactive store (auto-fetches GET /users and subscribes to WS db:sync/users)
 const users = dolphin.store.users;
 
-// Dynamic client-side filtering and sorting
-const activeAdmins = users.where(u => u.active && u.role === 'admin').orderBy('name', 'asc');
+// 1. DataEngine chainable filtering, text search, ranges, and sorting (New in v2.0)
+const results = users
+  .search('admin', ['role', 'name'])
+  .filter('active', true)
+  .range('age', 18, 65)
+  .sort('name', true); // asc=true
 
-// Subscribe to store changes manually
-const unsubscribe = dolphin.store.subscribe(() => {
-  console.log("Updated admin count:", activeAdmins.items.length);
+console.log("Filtered users:", results.items);
+
+// 2. Pagination (New in v2.0)
+const pageData = users.page(1, 10); // Page 1, size 10
+console.log(`Page ${pageData.page} of ${pageData.pages}`, pageData.data);
+
+// 3. Optimistic Updates with Rollback (New in v2.0)
+// Updates the UI instantly, calls API, and automatically rolls back if API fails
+await users.optimisticUpdate(101, { status: 'suspended' }, () => {
+  return dolphin.api.put('/users/101', { status: 'suspended' });
 });
 
-// Clean up when no longer needed to prevent memory leaks
+// 4. Per-Item Loading State Tracking (New in v2.0)
+users.trackStart(101); // Mark user 101 as processing
+console.log(users.isLoading(101)); // true
+users.trackEnd(101); // Remove from tracking
+
+// 5. Subscribe to store changes manually
+const unsubscribe = dolphin.store.subscribe(() => {
+  console.log("Store updated, current users:", users.items);
+});
+
+// Clean up when no longer needed to prevent memory leaks (WS unsubscribe fix)
 dolphin.store.destroy();
 ```
 

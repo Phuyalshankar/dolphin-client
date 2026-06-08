@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+  <meta charset="UTF-8">
+  <title>Dolphin Store v2 — Pure HTML Guide 🐬</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white p-8 font-mono text-sm leading-relaxed">
+
+<h1 class="text-3xl font-bold text-cyan-400 mb-2">🐬 Pure HTML बाट Store use गर्ने तरिका</h1>
+<p class="text-slate-400 mb-10">कुनै JavaScript नचाहिने — सबै data-* attributes बाट!</p>
+
+<!-- ============================================================
+  HOW IT WORKS
+============================================================ -->
+<section class="mb-10 bg-white/5 border border-white/10 rounded-xl p-6">
+  <h2 class="text-lg font-bold text-yellow-400 mb-3">🧠 कसरी काम गर्छ?</h2>
+  <div class="text-slate-300 space-y-2">
+    <p>Dolphin मा <strong class="text-white">२ प्रकारका stores</strong> छन्:</p>
+    <table class="w-full border-collapse mt-3">
+      <tr class="border-b border-white/10">
+        <th class="text-left py-2 pr-4 text-cyan-300">Store</th>
+        <th class="text-left py-2 pr-4 text-cyan-300">के हो?</th>
+        <th class="text-left py-2 text-cyan-300">HTML tag</th>
+      </tr>
+      <tr class="border-b border-white/5">
+        <td class="py-2 pr-4 text-green-300">UI Store (app)</td>
+        <td class="py-2 pr-4">Local state — search query, selected filter, modal open/close</td>
+        <td class="py-2"><code class="text-yellow-300">&lt;dolphin-store name="app"&gt;</code></td>
+      </tr>
+      <tr>
+        <td class="py-2 pr-4 text-blue-300">DB Store (products)</td>
+        <td class="py-2 pr-4">Server/API data — real-time, filter, sort, search</td>
+        <td class="py-2"><code class="text-yellow-300">data-api-get="..." data-api-store="app.products"</code></td>
+      </tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================
+  COMPLETE EXAMPLE
+============================================================ -->
+<section class="mb-10 bg-cyan-950/30 border border-cyan-500/30 rounded-xl p-6">
+  <h2 class="text-lg font-bold text-cyan-300 mb-4">✅ Complete Example — Search + Filter + Sort + Delete</h2>
+  <pre class="text-green-300 overflow-x-auto whitespace-pre-wrap text-xs leading-6">
+&lt;!-- ① UI Store सुरु गर्ने — search query, category, sort state राख्न --&gt;
+&lt;dolphin-store
+  name="app"
+  searchQuery=""
+  selectedCategory=""
+  sortBy=""&gt;
+&lt;/dolphin-store&gt;
+
+&lt;!-- ② Search Input --&gt;
+&lt;input
+  type="text"
+  placeholder="Search products..."
+  data-store-write="app.searchQuery"
+  data-store-input="products.search(app.searchQuery, ['title', 'description'])"
+/&gt;
+
+&lt;!-- ③ Category Filter --&gt;
+&lt;select
+  data-store-write="app.selectedCategory"
+  data-store-change="products.filter('category', app.selectedCategory)"&gt;
+  &lt;option value=""&gt;All Categories&lt;/option&gt;
+  &lt;option value="electronics"&gt;Electronics&lt;/option&gt;
+  &lt;option value="jewelery"&gt;Jewelery&lt;/option&gt;
+  &lt;option value="men's clothing"&gt;Men's Clothing&lt;/option&gt;
+&lt;/select&gt;
+
+&lt;!-- ④ Sort Buttons --&gt;
+&lt;button data-store-click="products.sort('price', true)"&gt;Price ↑&lt;/button&gt;
+&lt;button data-store-click="products.sort('price', false)"&gt;Price ↓&lt;/button&gt;
+&lt;button data-store-click="products.sort('title', true)"&gt;Name A→Z&lt;/button&gt;
+&lt;button data-store-click="products.clearFilters()"&gt;Clear All&lt;/button&gt;
+
+&lt;!-- ⑤ Product Grid — DB Store बाट data fetch हुन्छ --&gt;
+&lt;div
+  data-api-get="https://fakestoreapi.com/products"
+  data-api-store="app.products"
+  data-rt-bind="store/products"
+  data-rt-template="#product-card"&gt;
+  &lt;!-- Loading spinner --&gt;
+  &lt;div&gt;Loading...&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- ⑥ Product Card Template --&gt;
+&lt;template id="product-card"&gt;
+  {#each items as item}
+    &lt;div class="card"&gt;
+      &lt;img src="{{item.image}}" alt="{{item.title}}" /&gt;
+      &lt;h3&gt;{{item.title}}&lt;/h3&gt;
+      &lt;span&gt;$\{{item.price}}&lt;/span&gt;
+
+      &lt;!-- Delete Button — optimistic (तुरुन्त हटाउने) --&gt;
+      &lt;button data-store-click="
+        products.optimisticDelete(
+          item.id,
+          () =&gt; fetch('/api/products/' + item.id, { method: 'DELETE' })
+        )
+      "&gt;🗑 Delete&lt;/button&gt;
+    &lt;/div&gt;
+  {/each}
+&lt;/template&gt;
+  </pre>
+</section>
+
+<!-- ============================================================
+  EACH FEATURE
+============================================================ -->
+<section class="mb-10 bg-white/5 border border-white/10 rounded-xl p-6">
+  <h2 class="text-lg font-bold text-yellow-400 mb-4">📚 Feature-by-Feature Guide</h2>
+
+  <div class="space-y-6">
+
+    <!-- Search -->
+    <div class="border-l-4 border-cyan-500 pl-4">
+      <h3 class="text-cyan-300 font-bold mb-2">① Search (खोज्ने)</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;!-- data-store-input: typing हुँदा automatically search हुन्छ --&gt;
+&lt;input
+  data-store-write="app.searchQuery"
+  data-store-input="products.search(app.searchQuery, ['title', 'description'])"
+  placeholder="Search..."
+/&gt;
+
+&lt;!-- fields नदिए सबै fields मा search हुन्छ --&gt;
+&lt;input
+  data-store-input="products.search(app.searchQuery)"
+  placeholder="Search all fields..."
+/&gt;</pre>
+    </div>
+
+    <!-- Filter -->
+    <div class="border-l-4 border-green-500 pl-4">
+      <h3 class="text-green-300 font-bold mb-2">② Filter (छान्ने)</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;!-- Select dropdown बाट filter --&gt;
+&lt;select
+  data-store-write="app.selectedCategory"
+  data-store-change="products.filter('category', app.selectedCategory)"&gt;
+  &lt;option value=""&gt;All&lt;/option&gt;
+  &lt;option value="electronics"&gt;Electronics&lt;/option&gt;
+&lt;/select&gt;
+
+&lt;!-- Button बाट fixed value filter --&gt;
+&lt;button data-store-click="products.filter('inStock', true)"&gt;In Stock Only&lt;/button&gt;
+
+&lt;!-- Filter हटाउन --&gt;
+&lt;button data-store-click="products.filter('category', null)"&gt;Show All&lt;/button&gt;</pre>
+    </div>
+
+    <!-- Range -->
+    <div class="border-l-4 border-purple-500 pl-4">
+      <h3 class="text-purple-300 font-bold mb-2">③ Range Filter (मूल्य दायरा)</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;dolphin-store name="app" minPrice="0" maxPrice="1000"&gt;&lt;/dolphin-store&gt;
+
+&lt;input type="range" min="0" max="500"
+  data-store-write="app.maxPrice"
+  data-store-input="products.range('price', app.minPrice, app.maxPrice)"
+/&gt;
+
+&lt;!-- Fixed buttons --&gt;
+&lt;button data-store-click="products.range('price', 0, 50)"&gt;Under $50&lt;/button&gt;
+&lt;button data-store-click="products.range('price', 50, 200)"&gt;$50–$200&lt;/button&gt;</pre>
+    </div>
+
+    <!-- Sort -->
+    <div class="border-l-4 border-yellow-500 pl-4">
+      <h3 class="text-yellow-300 font-bold mb-2">④ Sort (मिलाउने)</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;!-- Dropdown बाट sort --&gt;
+&lt;select data-store-write="app.sortBy"
+        data-store-change="
+          app.sortBy === 'price-low'  ? products.sort('price', true)  :
+          app.sortBy === 'price-high' ? products.sort('price', false) :
+          app.sortBy === 'title'      ? products.sort('title', true)  :
+          products.clearFilters()
+        "&gt;
+  &lt;option value=""&gt;Default&lt;/option&gt;
+  &lt;option value="price-low"&gt;Price: Low to High&lt;/option&gt;
+  &lt;option value="price-high"&gt;Price: High to Low&lt;/option&gt;
+  &lt;option value="title"&gt;Name A→Z&lt;/option&gt;
+&lt;/select&gt;
+
+&lt;!-- Buttons --&gt;
+&lt;button data-store-click="products.sort('price', true)"&gt;Price ↑&lt;/button&gt;
+&lt;button data-store-click="products.sort('price', false)"&gt;Price ↓&lt;/button&gt;</pre>
+    </div>
+
+    <!-- Clear All -->
+    <div class="border-l-4 border-red-500 pl-4">
+      <h3 class="text-red-300 font-bold mb-2">⑤ Clear All Filters</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;button data-store-click="
+  products.clearFilters();
+  app.searchQuery = '';
+  app.selectedCategory = '';
+  app.sortBy = '';
+"&gt;🗑 Reset Everything&lt;/button&gt;</pre>
+    </div>
+
+    <!-- Delete -->
+    <div class="border-l-4 border-orange-500 pl-4">
+      <h3 class="text-orange-300 font-bold mb-2">⑥ Delete (हटाउने)</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;!-- Template भित्रको item को id use गरेर delete --&gt;
+&lt;template id="product-card"&gt;
+  {#each items as item}
+    &lt;div&gt;
+      {{item.title}}
+
+      &lt;!-- Instant delete (optimistic) — API fail भए rollback --&gt;
+      &lt;button data-store-click="
+        products.optimisticDelete(
+          item.id,
+          () =&gt; fetch('/api/products/' + item.id, { method: 'DELETE' })
+        )
+      "&gt;Delete&lt;/button&gt;
+
+      &lt;!-- Simple delete (without API) --&gt;
+      &lt;button data-store-click="products.deleteById(item.id)"&gt;Remove&lt;/button&gt;
+    &lt;/div&gt;
+  {/each}
+&lt;/template&gt;</pre>
+    </div>
+
+    <!-- Chaining -->
+    <div class="border-l-4 border-pink-500 pl-4">
+      <h3 class="text-pink-300 font-bold mb-2">⑦ Multiple Operations एकैसाथ</h3>
+      <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;!-- Semicolon बाट multiple actions --&gt;
+&lt;button data-store-click="
+  products.filter('category', 'electronics');
+  products.sort('price', true);
+  products.range('price', 0, 500)
+"&gt;Electronics under $500, by price&lt;/button&gt;</pre>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================================================
+  TEMPLATE RENDERING
+============================================================ -->
+<section class="mb-10 bg-white/5 border border-white/10 rounded-xl p-6">
+  <h2 class="text-lg font-bold text-yellow-400 mb-4">🎨 Template मा items कसरी render हुन्छ?</h2>
+  <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+&lt;!-- data-rt-bind="store/products" = products collection बाट data render गर्ने --&gt;
+&lt;!-- data-rt-template="#myTemplate" = यो template use गर्ने --&gt;
+
+&lt;div
+  data-api-get="/api/products"
+  data-api-store="app.products"
+  data-rt-bind="store/products"
+  data-rt-template="#product-card"&gt;
+&lt;/div&gt;
+
+&lt;template id="product-card"&gt;
+  &lt;!-- items = filtered + sorted results हो --&gt;
+  {#each items as item}
+    &lt;div&gt;{{item.title}} — $\{{item.price}}&lt;/div&gt;
+  {/each}
+
+  &lt;!-- items खाली भएको बेला --&gt;
+  {#if items.length === 0}
+    &lt;p&gt;No results found.&lt;/p&gt;
+  {/if}
+&lt;/template&gt;
+  </pre>
+  <div class="mt-4 bg-yellow-900/30 border border-yellow-500/30 rounded-lg p-3 text-yellow-200 text-xs">
+    ⚠️ <strong>Note:</strong> Template भित्र <code>items</code> = filtered/sorted results। <code>item.id</code>, <code>item.title</code> etc. directly use गर्न सकिन्छ।
+  </div>
+</section>
+
+<!-- ============================================================
+  REAL WORLD PATTERN
+============================================================ -->
+<section class="mb-10 bg-green-950/30 border border-green-500/30 rounded-xl p-6">
+  <h2 class="text-lg font-bold text-green-300 mb-4">🏆 Real-World Pattern (index.html जस्तै)</h2>
+  <pre class="bg-black/40 rounded-lg p-3 text-xs text-green-300 overflow-x-auto whitespace-pre-wrap">
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;body&gt;
+
+&lt;!-- UI State --&gt;
+&lt;dolphin-store name="app" searchQuery="" selectedCategory="" sortBy=""&gt;&lt;/dolphin-store&gt;
+
+&lt;!-- Search --&gt;
+&lt;input
+  data-store-write="app.searchQuery"
+  data-store-input="products.search(app.searchQuery, ['title'])"
+  placeholder="Search products..."
+/&gt;
+
+&lt;!-- Category Filter --&gt;
+&lt;select
+  data-store-write="app.selectedCategory"
+  data-store-change="products.filter('category', app.selectedCategory)"&gt;
+  &lt;option value=""&gt;All&lt;/option&gt;
+  &lt;option value="electronics"&gt;Electronics&lt;/option&gt;
+  &lt;option value="jewelery"&gt;Jewelery&lt;/option&gt;
+&lt;/select&gt;
+
+&lt;!-- Sort --&gt;
+&lt;button data-store-click="products.sort('price', true)"&gt;Price ↑&lt;/button&gt;
+&lt;button data-store-click="products.sort('price', false)"&gt;Price ↓&lt;/button&gt;
+&lt;button data-store-click="
+  products.clearFilters();
+  app.searchQuery=''; app.selectedCategory=''; app.sortBy=''
+"&gt;Reset&lt;/button&gt;
+
+&lt;!-- Product Grid --&gt;
+&lt;div
+  data-api-get="https://fakestoreapi.com/products"
+  data-api-store="app.products"
+  data-rt-bind="store/products"
+  data-rt-template="#product-card"&gt;
+  &lt;p&gt;Loading...&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;template id="product-card"&gt;
+  {#each items as item}
+    &lt;div&gt;
+      &lt;img src="{{item.image}}" /&gt;
+      &lt;h3&gt;{{item.title}}&lt;/h3&gt;
+      &lt;span&gt;$\{{item.price}}&lt;/span&gt;
+      &lt;button data-store-click="
+        products.optimisticDelete(item.id, () =&gt; fetch('/api/products/'+item.id, {method:'DELETE'}))
+      "&gt;Delete&lt;/button&gt;
+    &lt;/div&gt;
+  {/each}
+  {#if items.length === 0}
+    &lt;p&gt;No products found.&lt;/p&gt;
+  {/if}
+&lt;/template&gt;
+
+&lt;script src="./dolphin-client.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+  </pre>
+</section>
+
+</body>
+</html>
