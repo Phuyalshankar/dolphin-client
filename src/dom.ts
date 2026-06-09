@@ -855,7 +855,7 @@ function resolveTemplate(el: Element): string | null {
         });
 
         // 3. Unified listener for custom interaction events (click, change, keydown, keyup, dblclick, etc.)
-        const INTERACTION_EVENTS = ['click', 'change', 'submit', 'input', 'keydown', 'keyup', 'dblclick', 'focus', 'blur', 'mouseenter', 'mouseleave'];
+        const INTERACTION_EVENTS = ['click', 'change', 'input', 'keydown', 'keyup', 'dblclick', 'focus', 'blur', 'mouseenter', 'mouseleave'];
         INTERACTION_EVENTS.forEach(evtName => {
             this.addDomListener(document, evtName, async (e: any) => {
                 if (!e.target || !e.target.closest) return;

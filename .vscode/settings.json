@@ -1,5 +1,6 @@
 {
   "html.customData": [
     "./.vscode/dolphin-tags.json"
-  ]
+  ],
+  "liveServer.settings.port": 5501
 }
