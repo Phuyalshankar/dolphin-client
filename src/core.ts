@@ -156,6 +156,8 @@ export class DolphinClient {
 
             console.log(`[Dolphin] Connecting to ${wsUrl}...`);
             this.socket = new WebSocket(wsUrl);
+            // Enable binary frame reception for ESP8266 / IoT binary protocol
+            this.socket.binaryType = 'arraybuffer';
 
             this.socket.onopen = () => {
                 console.log(`[Dolphin] Connected as "${this.deviceId}" 🐬`);
@@ -194,8 +196,113 @@ export class DolphinClient {
         this.cleanupDomListeners();
     }
 
+    /**
+     * Decode a binary WebSocket frame from ESP8266 / IoT devices.
+     *
+     * Frame format:
+     *   [1 byte TYPE][1 byte TOPIC_LEN][TOPIC_LEN bytes topic][...payload]
+     *
+     * TYPE values:
+     *   0x01 = string  → [2 bytes len][utf8 bytes]           → { value: string }
+     *   0x02 = float32 → [4 bytes IEEE-754 big-endian]       → { value: number }
+     *   0x03 = uint16  → [2 bytes big-endian]                → { value: number }
+     *   0x04 = int16   → [2 bytes signed big-endian]         → { value: number }
+     *   0x05 = uint8   → [1 byte]                            → { value: number }
+     *   0x06 = JSON    → [2 bytes len][utf8 json bytes]      → parsed object
+     *   0x07 = multi   → [1 byte count][[1B klen][key][4B f32]...] → { key: value }
+     *
+     * Arduino/ESP8266 example (float32):
+     *   void sendF32(const char* topic, float v) {
+     *     uint8_t tl = strlen(topic);
+     *     uint8_t buf[2 + tl + 4];
+     *     buf[0] = 0x02; buf[1] = tl;
+     *     memcpy(&buf[2], topic, tl);
+     *     union { float f; uint8_t b[4]; } u; u.f = v;
+     *     buf[2+tl]=u.b[3]; buf[3+tl]=u.b[2]; buf[4+tl]=u.b[1]; buf[5+tl]=u.b[0];
+     *     webSocket.sendBIN(buf, sizeof(buf));
+     *   }
+     * @private
+     */
+    _decodeBinary(buf: ArrayBuffer): { topic: string; payload: any } | null {
+        if (buf.byteLength < 2) return null;
+        const view = new DataView(buf);
+        const u8   = new Uint8Array(buf);
+        const type = view.getUint8(0);
+        const topicLen = view.getUint8(1);
+        if (buf.byteLength < 2 + topicLen) return null;
+        const topic = new TextDecoder().decode(u8.slice(2, 2 + topicLen));
+        const off = 2 + topicLen;
+        let payload: any;
+        switch (type) {
+            case 0x01: { // string
+                if (buf.byteLength < off + 2) return null;
+                const slen = view.getUint16(off, false);
+                if (buf.byteLength < off + 2 + slen) return null;
+                payload = { value: new TextDecoder().decode(u8.slice(off + 2, off + 2 + slen)) };
+                break;
+            }
+            case 0x02: // float32
+                if (buf.byteLength < off + 4) return null;
+                payload = { value: Math.round(view.getFloat32(off, false) * 1000) / 1000 };
+                break;
+            case 0x03: // uint16
+                if (buf.byteLength < off + 2) return null;
+                payload = { value: view.getUint16(off, false) };
+                break;
+            case 0x04: // int16
+                if (buf.byteLength < off + 2) return null;
+                payload = { value: view.getInt16(off, false) };
+                break;
+            case 0x05: // uint8
+                if (buf.byteLength < off + 1) return null;
+                payload = { value: view.getUint8(off) };
+                break;
+            case 0x06: { // JSON
+                if (buf.byteLength < off + 2) return null;
+                const jlen = view.getUint16(off, false);
+                if (buf.byteLength < off + 2 + jlen) return null;
+                try { payload = JSON.parse(new TextDecoder().decode(u8.slice(off + 2, off + 2 + jlen))); }
+                catch { return null; }
+                break;
+            }
+            case 0x07: { // multi-float (multiple sensor values in one frame)
+                if (buf.byteLength < off + 1) return null;
+                const count = view.getUint8(off);
+                payload = {};
+                let cursor = off + 1;
+                for (let i = 0; i < count; i++) {
+                    if (buf.byteLength < cursor + 1) break;
+                    const klen = view.getUint8(cursor++);
+                    if (buf.byteLength < cursor + klen + 4) break;
+                    const key = new TextDecoder().decode(u8.slice(cursor, cursor + klen));
+                    cursor += klen;
+                    payload[key] = Math.round(view.getFloat32(cursor, false) * 1000) / 1000;
+                    cursor += 4;
+                }
+                break;
+            }
+            default: return null;
+        }
+        return { topic, payload };
+    }
+
     /** @private */
     _handleMessage(data) {
+        // ── Binary protocol (ESP8266 / IoT) ──────────────────────────────────
+        if (data instanceof ArrayBuffer) {
+            const decoded = this._decodeBinary(data);
+            if (decoded) {
+                if (this.options.debug) {
+                    console.log('%c📥 [Dolphin Binary]:', 'color: #22d3ee; font-weight: bold;', decoded);
+                }
+                this.handlers.forEach((cbs, pattern) => {
+                    if (this._matchTopic(pattern, decoded.topic)) {
+                        cbs.forEach(cb => cb(decoded.payload, decoded.topic));
+                    }
+                });
+            }
+            return;
+        }
         try {
             const msg = JSON.parse(data);
             if (this.options.debug) {
@@ -351,6 +458,41 @@ export class DolphinClient {
      */
     pubPush(topic, payload) {
         this._sendRaw({ type: 'pub', topic, payload });
+    }
+
+    /**
+     * Send a binary float32 frame to an ESP8266 / IoT device.
+     * Encodes: [0x02][topicLen][topic][float32 big-endian]
+     *
+     * ESP8266 Arduino receive example:
+     *   webSocket.onEvent([](uint8_t num, WStype_t type, uint8_t* payload, size_t len) {
+     *     if (type == WStype_BIN && len >= 2) {
+     *       uint8_t tl = payload[1];
+     *       // topic = payload[2..2+tl]
+     *       union { uint8_t b[4]; float f; } u;
+     *       u.b[3]=payload[2+tl]; u.b[2]=payload[3+tl];
+     *       u.b[1]=payload[4+tl]; u.b[0]=payload[5+tl];
+     *       float value = u.f; // use value
+     *     }
+     *   });
+     *
+     * @param {string} topic
+     * @param {number} value  - float32 value (e.g. 1.0 to set brightness)
+     */
+    publishBinary(topic: string, value: number): void {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.warn('[Dolphin] publishBinary: WebSocket not connected');
+            return;
+        }
+        const topicBytes = new TextEncoder().encode(topic);
+        const buf = new ArrayBuffer(2 + topicBytes.length + 4);
+        const view = new DataView(buf);
+        const u8   = new Uint8Array(buf);
+        view.setUint8(0, 0x02);                         // TYPE: float32
+        view.setUint8(1, topicBytes.length);             // topic length
+        u8.set(topicBytes, 2);                           // topic bytes
+        view.setFloat32(2 + topicBytes.length, value, false); // big-endian float
+        this.socket.send(buf);
     }
 
     /**
