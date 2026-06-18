@@ -595,10 +595,54 @@ function resolveTemplate(el: Element): string | null {
     clientProto._executeStoreAction = function(expression: string, element?: Element) {
         this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
         const parentCtx = (element && typeof this.getClosestContext === 'function') ? this.getClosestContext(element) : null;
+
+        // @fix: Resolve the closest store name so shorthand `count = count + 1` (without store prefix)
+        // can be assigned back to the correct store. Previously: outer proxy had no set trap,
+        // causing assignments like `count = count + 1` to silently target the global object.
+        const getClosestStoreName = (el?: Element): string | null => {
+            if (!el) return null;
+            // Walk up the DOM to find the nearest data-rt-bind="store/..." context element
+            let cursor: Element | null = el;
+            while (cursor) {
+                const bind = cursor.getAttribute && cursor.getAttribute('data-rt-bind');
+                if (bind && bind.startsWith('store/')) return bind.slice(6); // "store/counter" → "counter"
+                const dsName = cursor.getAttribute && (cursor.getAttribute('name') || cursor.getAttribute('data-store'));
+                if (dsName && cursor.tagName && cursor.tagName.toLowerCase() === 'dolphin-store') return dsName;
+                cursor = cursor.parentElement;
+            }
+            return null;
+        };
+        const closestStoreName = getClosestStoreName(element);
         
         const context = new Proxy({}, {
             has: (target, prop) => {
                 return true; // Pretend we have every store name!
+            },
+            // @fix: Add set trap to outer proxy so that shorthand `count = count + 1`
+            // writes back to the correct store (closest context store) instead of global.
+            set: (target, prop, val) => {
+                if (typeof prop === 'string') {
+                    // Priority 1: write to the closest store if this key lives there
+                    if (closestStoreName && parentCtx && prop in parentCtx) {
+                        this.setStoreState(closestStoreName, prop, val);
+                        return true;
+                    }
+                    // Priority 2: search all stores for this key and write to first match
+                    if (this.uiStores) {
+                        for (const [sName, sState] of this.uiStores) {
+                            if (prop in sState) {
+                                this.setStoreState(sName, prop, val);
+                                return true;
+                            }
+                        }
+                    }
+                    // Priority 3: write to closest store even if key wasn't pre-seeded
+                    if (closestStoreName) {
+                        this.setStoreState(closestStoreName, prop, val);
+                        return true;
+                    }
+                }
+                return false;
             },
             get: (target, prop) => {
                 if (typeof prop === 'string') {
@@ -1177,6 +1221,15 @@ function resolveTemplate(el: Element): string | null {
                     if (node.hasAttribute('data-rt-attr')) {
                         const attrStr = node.getAttribute('data-rt-attr');
                         if (attrStr) {
+                            // @fix: Boolean HTML attributes (disabled, checked, etc.) must be *removed*
+                            // when false — setting disabled="false" still disables the element in HTML.
+                            // Previously: setAttribute(attr, false) — broken for disabled/checked/etc.
+                            const BOOL_ATTRS = new Set([
+                                'disabled', 'checked', 'readonly', 'required', 'hidden',
+                                'selected', 'multiple', 'autofocus', 'autoplay', 'controls',
+                                'loop', 'muted', 'open', 'default', 'defer', 'async',
+                                'allowfullscreen', 'formnovalidate', 'novalidate', 'reversed',
+                            ]);
                             splitByUnquotedChar(attrStr, ',').forEach(b => {
                                 const pair = splitFirstUnquotedColon(b);
                                 if (pair) {
@@ -1184,8 +1237,18 @@ function resolveTemplate(el: Element): string | null {
                                     const key = pair[1].trim();
                                     if (attrName && key) {
                                         const val = evaluateExpression(key, processedPayload);
-                                        if (val !== undefined && val !== null) {
-                                            node.setAttribute(attrName, val);
+                                        if (BOOL_ATTRS.has(attrName)) {
+                                            // Boolean attribute: add (empty) or remove entirely
+                                            if (val && val !== 'false' && val !== '0' && val !== 0) {
+                                                node.setAttribute(attrName, '');
+                                            } else {
+                                                node.removeAttribute(attrName);
+                                            }
+                                        } else if (val === false || val === null || val === undefined) {
+                                            // Non-boolean: remove when explicitly false/null/undefined
+                                            node.removeAttribute(attrName);
+                                        } else {
+                                            node.setAttribute(attrName, String(val));
                                         }
                                     }
                                 }
@@ -1285,8 +1348,18 @@ function resolveTemplate(el: Element): string | null {
             resolvingSet.add(src);
 
             const hashIndex = src.indexOf('#');
-            const url = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
+            const rawUrl = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
             const selector = hashIndex !== -1 ? src.substring(hashIndex) : null;
+
+            // @fix: Resolve component URLs relative to document.baseURI (respects <base href="/">)
+            // so that ./components/login.html always fetches /components/login.html regardless
+            // of the current hash route or URL path (was: resolved relative to current URL, broke on CDN).
+            const baseURI = (typeof document !== 'undefined' && document.baseURI)
+                ? document.baseURI
+                : (typeof window !== 'undefined' ? window.location.origin + '/' : '/');
+            const url = rawUrl
+                ? new URL(rawUrl, baseURI).href
+                : baseURI;
 
             let promise = componentPromiseCache.get(url);
             if (!promise) {
@@ -1344,6 +1417,8 @@ function resolveTemplate(el: Element): string | null {
         // @fix: Track in-flight navigation fetch so it can be aborted on new navigation (was: race condition)
         let _spaAbortController: AbortController | null = null;
 
+        const routerMode: string = this.options.routerMode || 'hash';
+
         const findViewport = () => {
             const selector = this.options.routerViewport || 'main, #viewport, body';
             const selectors = selector.split(',').map((s: string) => s.trim());
@@ -1354,18 +1429,62 @@ function resolveTemplate(el: Element): string | null {
             return document.body;
         };
 
-        const loadPage = async (url: string, pushState = true) => {
+        const applyPage = async (html: string, pushUrlOrHash?: string, pushState = true) => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            if (doc.title) document.title = doc.title;
+
+            const newViewport = doc.querySelector(this.options.routerViewport || 'main, #viewport, body');
+            const currentViewport = findViewport();
+
+            if (newViewport && currentViewport) {
+                currentViewport.innerHTML = newViewport.innerHTML;
+                Array.from(newViewport.attributes).forEach((attr: any) => {
+                    currentViewport.setAttribute(attr.name, attr.value);
+                });
+            } else if (currentViewport) {
+                currentViewport.innerHTML = doc.body.innerHTML;
+            }
+
+            if (pushState && pushUrlOrHash) {
+                if (routerMode === 'hash') {
+                    // Update hash without triggering another hashchange
+                    const newHash = pushUrlOrHash.startsWith('#') ? pushUrlOrHash : '#' + pushUrlOrHash;
+                    if (window.location.hash !== newHash) {
+                        window.history.pushState({ dolphinSpa: true, hash: newHash }, '', newHash);
+                    }
+                } else {
+                    window.history.pushState({ dolphinSpa: true, url: pushUrlOrHash }, '', pushUrlOrHash);
+                }
+            }
+
+            if (this.options.routerTransitions && currentViewport) {
+                currentViewport.classList.remove('dolphin-fade-out');
+                currentViewport.classList.add('dolphin-fade-in');
+                setTimeout(() => currentViewport.classList.remove('dolphin-fade-in'), 300);
+            }
+
+            await this._resolveImports(currentViewport);
+            this._scanStoreBinds();
+            this._scanAndFetchAPIBinds();
+        };
+
+        const loadPage = async (rawUrl: string, pushState = true) => {
             try {
                 if (this.options.debug) {
-                    console.log(`%c🛣️ [Dolphin Router]: Navigating to ${url}...`, 'color: #3b82f6; font-weight: bold;');
+                    console.log(`%c🛣️ [Dolphin Router]: Navigating to ${rawUrl}...`, 'color: #3b82f6; font-weight: bold;');
                 }
 
                 // @fix: Abort any in-flight navigation to prevent race conditions (was: older fetch could overwrite newer)
-                if (_spaAbortController) {
-                    _spaAbortController.abort();
-                }
+                if (_spaAbortController) _spaAbortController.abort();
                 _spaAbortController = new AbortController();
                 const signal = _spaAbortController.signal;
+
+                // @fix: Always resolve fetch URL against document.baseURI (respects <base href="/">)
+                // so that fetch('/register') always hits the correct origin on CDN (was: resolved relative to current path)
+                const baseURI = document.baseURI || window.location.origin + '/';
+                const absoluteUrl = new URL(rawUrl, baseURI).href;
 
                 const viewport = findViewport();
                 if (this.options.routerTransitions && viewport) {
@@ -1373,75 +1492,145 @@ function resolveTemplate(el: Element): string | null {
                     await new Promise(r => setTimeout(r, 150));
                 }
 
-                const response = await fetch(url, { signal });
+                const response = await fetch(absoluteUrl, { signal });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const html = await response.text();
                 _spaAbortController = null;
 
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-
-                if (doc.title) {
-                    document.title = doc.title;
-                }
-
-                const newViewport = doc.querySelector(this.options.routerViewport || 'main, #viewport, body');
-                const currentViewport = findViewport();
-
-                if (newViewport && currentViewport) {
-                    currentViewport.innerHTML = newViewport.innerHTML;
-                    Array.from(newViewport.attributes).forEach((attr: any) => {
-                        currentViewport.setAttribute(attr.name, attr.value);
-                    });
-                } else if (currentViewport) {
-                    currentViewport.innerHTML = doc.body.innerHTML;
-                }
-
-                if (pushState) {
-                    window.history.pushState({ dolphinSpa: true, url }, '', url);
-                }
-
-                if (this.options.routerTransitions && currentViewport) {
-                    currentViewport.classList.remove('dolphin-fade-out');
-                    currentViewport.classList.add('dolphin-fade-in');
-                    setTimeout(() => currentViewport.classList.remove('dolphin-fade-in'), 300);
-                }
-
-                await this._resolveImports(currentViewport);
-                this._scanStoreBinds();
-                this._scanAndFetchAPIBinds();
+                await applyPage(html, rawUrl, pushState);
 
             } catch (err: any) {
                 // @fix: Don't redirect on AbortError — it's an intentional cancellation, not a real error
                 if (err && err.name === 'AbortError') return;
                 console.error('[Dolphin Router Error]: Failed to route page:', err);
-                window.location.href = url;
+                window.location.href = rawUrl;
             }
         };
 
-        this.addDomListener(document, 'click', (e: any) => {
-            const anchor = e.target.closest('a');
-            if (!anchor) return;
+        // ── HASH ROUTING MODE ─────────────────────────────────────────────────
+        // @fix: Hash routing (#/register) is the default CDN-safe mode.
+        // The hash portion is NEVER sent to the server, so the server always
+        // serves index.html and the client handles routing entirely in-browser.
+        // No _redirects, vercel.json, or 404.html required.
+        if (routerMode === 'hash') {
+            const getHashPath = (): string => {
+                const hash = window.location.hash;
+                if (!hash || hash === '#' || hash === '#/') return '';
+                // Strip the leading '#', give back e.g. '/register' or '/dashboard/profile'
+                return hash.slice(1);
+            };
 
-            if (!anchor.hasAttribute('data-spa') && anchor.getAttribute('data-spa') !== 'true') return;
+            const loadHashPage = async (path: string) => {
+                if (!path || path === '/') return; // root — nothing to load
+                if (this.options.debug) {
+                    console.log(`%c🛣️ [Dolphin Hash Router]: Loading ${path}`, 'color: #3b82f6; font-weight: bold;');
+                }
 
-            const href = anchor.getAttribute('href');
-            if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+                // Try candidates: /register.html → /register/index.html → /register (in that order)
+                const bare = path.endsWith('/') ? path.slice(0, -1) : path;
+                const candidates: string[] = [];
+                if (!bare.endsWith('.html')) {
+                    candidates.push(bare + '.html');
+                    candidates.push(bare + '/index.html');
+                }
+                candidates.push(bare);
 
-            const url = new URL(href, window.location.href);
-            if (url.origin !== window.location.origin) return;
+                if (_spaAbortController) _spaAbortController.abort();
+                _spaAbortController = new AbortController();
+                const signal = _spaAbortController.signal;
 
-            e.preventDefault();
-            loadPage(href);
-        });
+                const baseURI = document.baseURI || window.location.origin + '/';
+                let html: string | null = null;
 
-        this.addDomListener(window, 'popstate', (e: any) => {
-            if (e.state && e.state.dolphinSpa) {
-                loadPage(e.state.url, false);
-            } else if (e.state === null) {
-                loadPage(window.location.pathname, false);
+                for (const candidate of candidates) {
+                    try {
+                        const absoluteUrl = new URL(candidate, baseURI).href;
+                        const res = await fetch(absoluteUrl, { signal });
+                        if (res.ok) {
+                            html = await res.text();
+                            break;
+                        }
+                    } catch (err: any) {
+                        if (err && err.name === 'AbortError') return;
+                    }
+                }
+
+                _spaAbortController = null;
+
+                if (html !== null) {
+                    const viewport = findViewport();
+                    if (this.options.routerTransitions && viewport) {
+                        viewport.classList.add('dolphin-fade-out');
+                        await new Promise(r => setTimeout(r, 150));
+                    }
+                    // pushState=false: hash is already in the URL, don't double-push
+                    await applyPage(html, undefined, false);
+                } else {
+                    console.warn(`[Dolphin Hash Router]: No page found for hash path "${path}"`);
+                }
+            };
+
+            // Load page matching the current hash on first init
+            const initialPath = getHashPath();
+            if (initialPath) {
+                loadHashPage(initialPath);
             }
-        });
+
+            // Listen for hash changes (back/forward + programmatic hash updates)
+            this.addDomListener(window, 'hashchange', () => {
+                loadHashPage(getHashPath());
+            });
+
+            // Intercept <a data-spa> clicks → convert to hash navigation (no full reload)
+            this.addDomListener(document, 'click', (e: any) => {
+                const anchor = e.target.closest('a');
+                if (!anchor) return;
+                if (!anchor.hasAttribute('data-spa')) return;
+
+                const href = anchor.getAttribute('href');
+                if (!href || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+                // Already a hash link — let browser handle it (hashchange fires automatically)
+                if (href.startsWith('#')) return;
+
+                // External link — don't intercept
+                try {
+                    const parsed = new URL(href, window.location.href);
+                    if (parsed.origin !== window.location.origin) return;
+                } catch { return; }
+
+                e.preventDefault();
+                // Convert to hash navigation: /register → #/register
+                const hashTarget = href.startsWith('/') ? '#' + href : '#/' + href;
+                window.location.hash = hashTarget;
+            });
+
+        // ── HISTORY (pushState) MODE ──────────────────────────────────────────
+        // Clean URLs (/register) but requires server/CDN to serve index.html for all routes.
+        } else {
+            this.addDomListener(document, 'click', (e: any) => {
+                const anchor = e.target.closest('a');
+                if (!anchor) return;
+                if (!anchor.hasAttribute('data-spa') && anchor.getAttribute('data-spa') !== 'true') return;
+
+                const href = anchor.getAttribute('href');
+                if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+                const url = new URL(href, window.location.href);
+                if (url.origin !== window.location.origin) return;
+
+                e.preventDefault();
+                loadPage(href);
+            });
+
+            this.addDomListener(window, 'popstate', (e: any) => {
+                if (e.state && e.state.dolphinSpa) {
+                    loadPage(e.state.url, false);
+                } else if (e.state === null) {
+                    loadPage(window.location.pathname, false);
+                }
+            });
+        }
 
         if (this.options.routerTransitions) {
             const style = document.createElement('style');
