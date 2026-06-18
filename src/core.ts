@@ -50,8 +50,22 @@ export class DolphinClient {
             methodSpoofing:   false,
             routerViewport:   'main, #viewport, body',
             routerTransitions: true,
+            // @fix: Default to 'hash' routing so CDN/static hosting works with zero config.
+            // Hash URLs (#/register) are never sent to the server, so no _redirects or 404.html needed.
+            // Set routerMode: 'history' to use clean pushState URLs (requires server-side fallback).
+            routerMode:       'hash',
             ...options,
         };
+
+        // @fix: Auto-inject <base href="/"> so all relative asset paths (./script.js, ./components/x.html)
+        // always resolve from the site root, regardless of the current URL path or hash.
+        if (typeof document !== 'undefined' && !document.querySelector('base')) {
+            const base = document.createElement('base');
+            base.href = (typeof window !== 'undefined' ? window.location.origin : '') + '/';
+            if (document.head) {
+                document.head.insertBefore(base, document.head.firstChild);
+            }
+        }
 
         /** @type {WebSocket|null} */
         this.socket = null;
