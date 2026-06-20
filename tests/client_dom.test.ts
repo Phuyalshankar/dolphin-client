@@ -393,7 +393,7 @@ describe('DOM Binding', () => {
     // Execute the timer manually
     timers[0].cb();
 
-    expect(c.pubPush).toHaveBeenCalledWith('input/chat', { name: 'message', value: 'hello' });
+    expect(c.pubPush).toHaveBeenCalledWith('input/chat', { name: 'message', value: 'hello', deviceId: c.deviceId });
 
     global.setTimeout = originalSetTimeout;
   });

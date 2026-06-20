@@ -18,6 +18,8 @@ describe('DolphinClient — Component Imports & SPA Routing', () => {
             }),
             head: {
                 appendChild: jest.fn(),
+                insertBefore: jest.fn(),
+                firstChild: null,
             },
         };
         (global as any).window = {
@@ -79,7 +81,7 @@ describe('DolphinClient — Component Imports & SPA Routing', () => {
 
             expect(mockEl.innerHTML).toBe('<header><h1>My Header Layout</h1></header>');
             expect(mockEl.removeAttribute).toHaveBeenCalledWith('data-import');
-            expect((global as any).fetch).toHaveBeenCalledWith('header.html');
+            expect((global as any).fetch).toHaveBeenCalledWith('http://localhost:3000/header.html');
         });
 
         test('uses cache for repeat component imports', async () => {
@@ -138,10 +140,8 @@ describe('DolphinClient — Component Imports & SPA Routing', () => {
                 innerHTML: '',
             };
 
-            let callCount = 0;
-            mockEl.querySelectorAll = jest.fn().mockImplementation(() => {
-                callCount++;
-                if (callCount === 1) {
+            mockEl.querySelectorAll = jest.fn().mockImplementation((selector) => {
+                if (selector === '[data-import]') {
                     return [nestedChild];
                 }
                 return [];
@@ -190,7 +190,7 @@ describe('DolphinClient — Component Imports & SPA Routing', () => {
 
             expect(mockEl.innerHTML).toBe('<header id="header">Header Content</header>');
             expect(mockEl.removeAttribute).toHaveBeenCalledWith('data-import');
-            expect((global as any).fetch).toHaveBeenCalledWith('components.html');
+            expect((global as any).fetch).toHaveBeenCalledWith('http://localhost:3000/components.html');
         });
     });
 
@@ -204,7 +204,7 @@ describe('DolphinClient — Component Imports & SPA Routing', () => {
             client._initSPARouter();
 
             expect(client.addDomListener).toHaveBeenCalledWith(document, 'click', expect.any(Function));
-            expect(client.addDomListener).toHaveBeenCalledWith(window, 'popstate', expect.any(Function));
+            expect(client.addDomListener).toHaveBeenCalledWith(window, 'hashchange', expect.any(Function));
         });
     });
 });

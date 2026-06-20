@@ -187,6 +187,7 @@ describe('Reactive Store & Declarative Validation', () => {
       } as any;
     }
     (global as any).document = {
+      querySelector: jest.fn().mockReturnValue(null),
       querySelectorAll: jest.fn().mockImplementation((sel) => {
         if (sel === '[data-store-write]') return docElements.filter(e => e.hasAttribute('data-store-write'));
         if (sel === '[data-store-read]') return docElements.filter(e => e.hasAttribute('data-store-read'));
@@ -197,7 +198,8 @@ describe('Reactive Store & Declarative Validation', () => {
         return [];
       }),
       addEventListener: jest.fn(),
-      createElement: jest.fn().mockImplementation((tag) => new MockElement(tag))
+      createElement: jest.fn().mockImplementation((tag) => new MockElement(tag)),
+      head: { insertBefore: jest.fn() }
     };
     (global as any).FormData = class {
       form: any;

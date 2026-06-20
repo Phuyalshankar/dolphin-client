@@ -215,7 +215,44 @@ This example displays a dynamic list of real-time notifications. It automaticall
 
 ---
 
-### ३.३.३. HTML Directives & Sub-bindings (डाइरेक्टिभ्स र सब-बाइन्डिङ)
+### ३.३.३. Declarative Nested Array Auto-Looping (No-JS, No-{#each}!) (डिक्लारेटिभ नेस्टेड एरे स्वतः लुपिङ)
+Often, your WebSocket payload or REST API response returns an object containing a list/array (e.g., `{ items: [...] }` or `{ list: [...] }`). 
+
+Dolphin Client allows you to bind directly to this store or topic and automatically render list templates **without writing any Svelte-style `{#each}` loops or manual JavaScript `map()` loops**. 
+
+If the bound template does **NOT** contain an `{#each}` loop block directive:
+1. Dolphin Client automatically inspects the incoming payload for any array properties (like `items` or `list`).
+2. It applies any declarative sorting (`data-rt-sort`) or searching (`data-rt-search`) directly to the extracted array.
+3. It recursively compiles and renders the template for **each item** inside the array and mounts the joined output into the DOM container.
+
+#### Real-World Example (Declarative Shop Catalog):
+```html
+<!-- Input fields sync to products store -->
+<input data-store-write="products.searchQuery" placeholder="Search..." />
+<button data-store-click="products.sortBy = 'price-low'">Price: Low to High</button>
+
+<!-- Grid binds to store/products, searches, sorts, and renders WITHOUT #each -->
+<div data-rt-bind="store/products"
+     data-rt-template="#product-card"
+     data-rt-search="title == products.searchQuery"
+     data-rt-sort="products.sortBy"
+     class="grid-container">
+  <div>Loading catalog...</div>
+</div>
+
+<!-- Template represents a SINGLE product card, not the loop -->
+<template id="product-card">
+  <div class="card">
+    <img src="{{image}}" alt="{{title}}" />
+    <h4>{{title}}</h4>
+    <span>${{price}}</span>
+  </div>
+</template>
+```
+
+---
+
+### ३.३.४. HTML Directives & Sub-bindings (डाइरेक्टिभ्स र सब-बाइन्डिङ)
 
 ### ३.४. Browser-Native Template Tags (No Backticks!)
 To completely avoid multi-line strings, backticks (\`...\`), and quote-escaping issues in your HTML attributes, you can point `data-rt-template` directly to a standard browser-native **`<template>` tag selector**:

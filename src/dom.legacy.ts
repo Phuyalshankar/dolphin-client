@@ -1,4 +1,10 @@
+import { scanVFSBinds } from './vfs';
+
 export function attachDOMBinding(clientProto: any) {
+    clientProto._scanVFSBinds = function() {
+        scanVFSBinds(this);
+    };
+
     // @fix: Failed promises are evicted from cache so retries fetch fresh content (was: permanent failure cache)
     const componentPromiseCache = new Map<string, Promise<string>>();
 
@@ -375,10 +381,13 @@ function resolveTemplate(el: Element): string | null {
     }
 
     // 3. Batched Updates Scheduler using requestAnimationFrame
+    // @fix: Map cleared every RAF cycle — disconnected elements are skipped and never retained
     const pendingUpdates = new Map<Element, string>();
     let rafScheduled = false;
 
     function scheduleDOMUpdate(element: Element, newHTML: string) {
+        // @fix: Early guard — skip elements already detached from DOM to prevent stale references
+        if (typeof element.isConnected === 'boolean' && !element.isConnected) return;
         pendingUpdates.set(element, newHTML);
         if (!rafScheduled) {
             rafScheduled = true;
@@ -396,7 +405,35 @@ function resolveTemplate(el: Element): string | null {
         }
     }
 
+
     // ─── PHASE 3: GLOBAL REACTIVE STORES ──────────────────────────────────────
+
+    // @fix: DOM query cache for data-store-read elements.
+    // Avoids a full querySelectorAll scan on every setStoreState call.
+    // Cache key = "storeName.key", value = NodeList snapshot (array).
+    // Invalidated when MutationObserver detects DOM changes.
+    const _storeReadCache = new Map<string, Element[]>();
+    let _storeReadCacheValid = true;
+
+    function _invalidateStoreReadCache() {
+        _storeReadCache.clear();
+        _storeReadCacheValid = true;
+    }
+
+    // Watch for DOM mutations that could add/remove data-store-read elements
+    if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+        const _domObserver = new MutationObserver(() => {
+            _invalidateStoreReadCache();
+        });
+        document.addEventListener('DOMContentLoaded', () => {
+            _domObserver.observe(document.body || document.documentElement, {
+                childList: true,
+                subtree: true,
+                attributeFilter: ['data-store-read'],
+            });
+        }, { once: true });
+    }
+
     clientProto.setStoreState = function(storeName: string, key: string, val: any, originEl?: Element) {
         this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
         if (!this.uiStores.has(storeName)) {
@@ -410,7 +447,16 @@ function resolveTemplate(el: Element): string | null {
         }
 
         if (typeof document !== 'undefined') {
-            const readElements = document.querySelectorAll(`[data-store-read="${storeName}.${key}"]`);
+            // @fix: Use cached element list instead of querySelectorAll every call
+            const cacheKey = `${storeName}.${key}`;
+            let readElements: Element[];
+            if (_storeReadCache.has(cacheKey)) {
+                readElements = _storeReadCache.get(cacheKey)!;
+            } else {
+                readElements = Array.from(document.querySelectorAll(`[data-store-read="${cacheKey}"]`));
+                _storeReadCache.set(cacheKey, readElements);
+            }
+
             readElements.forEach((el: any) => {
                 if (el === originEl) return;
                 if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
@@ -430,6 +476,7 @@ function resolveTemplate(el: Element): string | null {
             this._updateDOM(`store/${storeName}`, store);
         }
     };
+
 
     clientProto.getStoreState = function(storeName: string, key: string) {
         this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
@@ -988,6 +1035,9 @@ function resolveTemplate(el: Element): string | null {
         // 6. Scan and initialize local reactive stores
         this._scanStoreBinds();
 
+        // 6.5. Scan and initialize VFS folder explorers
+        this._scanVFSBinds();
+
         // 7. Resolve declarative HTML component imports
         this._resolveImports();
 
@@ -1048,7 +1098,7 @@ function resolveTemplate(el: Element): string | null {
                     }
                 }
             } catch(e) {
-                console.error('[Dolphin] API Get Error:', e);
+                if (this.options?.debug) console.error('[Dolphin] API Get Error:', e);
             }
         }
     };
@@ -1468,6 +1518,7 @@ function resolveTemplate(el: Element): string | null {
             await this._resolveImports(currentViewport);
             this._scanStoreBinds();
             this._scanAndFetchAPIBinds();
+            this._scanVFSBinds();
         };
 
         const loadPage = async (rawUrl: string, pushState = true) => {

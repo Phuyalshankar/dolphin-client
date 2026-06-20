@@ -1,16 +1,22 @@
 {
   "name": "dolphin-client",
-  "version": "1.1.5",
+  "version": "1.2.2",
   "description": "HTML is back! Hookless, framework-agnostic real-time reactive DOM-binding client for Dolphin Server with WebSockets, WebRTC signaling, and offline REST API fallbacks.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core-entry.d.ts",
+      "import": "./dist/core-entry.js",
+      "require": "./dist/core-entry.cjs"
     }
   },
   "bin": {
@@ -20,17 +26,17 @@
     "dist",
     "README.md",
     "LICENSE",
-    "fulltutorial.md",
     "scripts",
     ".vscode",
     "bin"
   ],
   "scripts": {
-    "build": "npm run build:iife && npm run build:min && npm run build:esm && npm run build:cjs && tsc",
+    "build": "npm run build:iife && npm run build:min && npm run build:esm && npm run build:cjs && npm run build:core && tsc",
     "build:iife": "esbuild ./src/index.ts --bundle --outfile=dist/dolphin-client.js --format=iife --global-name=DolphinModule",
     "build:min": "esbuild ./src/index.ts --bundle --minify --outfile=dist/dolphin-client.min.js --format=iife --global-name=DolphinModule",
     "build:esm": "esbuild ./src/index.ts --bundle --outfile=dist/index.js --format=esm",
     "build:cjs": "esbuild ./src/index.ts --bundle --outfile=dist/index.cjs --format=cjs",
+    "build:core": "esbuild ./src/core-entry.ts --bundle --outfile=dist/core-entry.js --format=esm && esbuild ./src/core-entry.ts --bundle --outfile=dist/core-entry.cjs --format=cjs",
     "test": "jest",
     "postinstall": "node scripts/postinstall.js"
   },
@@ -47,7 +53,11 @@
     "dom-binding",
     "websocket",
     "webrtc",
-    "intercom"
+    "intercom",
+    "zero-dependency",
+    "offline-first",
+    "spa",
+    "pub-sub"
   ],
   "author": "Shankar Phuyal",
   "license": "ISC",

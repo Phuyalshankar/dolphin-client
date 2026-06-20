@@ -21,29 +21,63 @@ attachCollab(DolphinClient.prototype);
 attachPwa(DolphinClient.prototype);
 attachTesting(DolphinClient.prototype);
 
+// Standalone DOM helper functions
+export const $ = (selector: string, parent: Document | HTMLElement = document): HTMLElement | null => {
+  return parent.querySelector(selector);
+};
+
+export const $$ = (selector: string, parent: Document | HTMLElement = document): HTMLElement[] => {
+  return Array.from(parent.querySelectorAll(selector));
+};
+
+export const on = (selector: string | HTMLElement, event: string, callback: EventListenerOrEventListenerObject): void => {
+  const elements = typeof selector === 'string' ? $$(selector) : [selector];
+  elements.forEach(el => el.addEventListener(event, callback));
+};
+
+export const dolphinElement = $;
+export const dolphinQuery = on;
+
+// Attach to DolphinClient prototype for class-level helper access
+(DolphinClient.prototype as any).$ = $;
+(DolphinClient.prototype as any).$$ = $$;
+(DolphinClient.prototype as any).on = on;
+(DolphinClient.prototype as any).dolphinElement = dolphinElement;
+(DolphinClient.prototype as any).dolphinQuery = dolphinQuery;
+
 if (typeof window !== 'undefined') {
   (window as any).DolphinClient = DolphinClient;
   
+  // Safe global bindings to avoid conflicts
+  if (!(window as any).$) (window as any).$ = $;
+  if (!(window as any).$$) (window as any).$$ = $$;
+  if (!(window as any).on) (window as any).on = on;
+  
+  (window as any).dolphinElement = dolphinElement;
+  (window as any).dolphinQuery = dolphinQuery;
+  
   // Auto-initialize a default client for zero-config plain HTML pages!
   document.addEventListener('DOMContentLoaded', () => {
-    if (!(window as any).dolphin) {
-      // Check if the script tag has data-debug="true"
-      const scriptEl = document.querySelector('script[src*="dolphin-client"]');
-      const debugMode = scriptEl ? scriptEl.getAttribute('data-debug') === 'true' : false;
+    setTimeout(() => {
+      if (!(window as any).dolphin) {
+        // Check if the script tag has data-debug="true"
+        const scriptEl = document.querySelector('script[src*="dolphin-client"]');
+        const debugMode = scriptEl ? scriptEl.getAttribute('data-debug') === 'true' : false;
 
-      const dolphin = new DolphinClient(undefined, undefined, { debug: debugMode });
-      (window as any).dolphin = dolphin;
-      
-      if (debugMode) {
-        console.log('%c🐬 [Dolphin Client] Auto-initialized local reactive engine!', 'color: #06b6d4; font-weight: bold; font-size: 14px;');
-        console.log('%c👉 Tip: You can access the client instance via "window.dolphin" in console.', 'color: #94a3b8; font-style: italic;');
+        const dolphin = new DolphinClient(undefined, undefined, { debug: debugMode });
+        (window as any).dolphin = dolphin;
+        
+        if (debugMode) {
+          console.log('%c🐬 [Dolphin Client] Auto-initialized local reactive engine!', 'color: #06b6d4; font-weight: bold; font-size: 14px;');
+          console.log('%c👉 Tip: You can access the client instance via "window.dolphin" in console.', 'color: #94a3b8; font-style: italic;');
+        }
+        
+        // Auto-seed default demo state if the demo input is present on the page
+        if (document.querySelector('[data-store-write="app.username"]')) {
+          (dolphin as any).setStoreState('app', 'username', 'नमस्ते साथी!');
+        }
       }
-      
-      // Auto-seed default demo state if the demo input is present on the page
-      if (document.querySelector('[data-store-write="app.username"]')) {
-        (dolphin as any).setStoreState('app', 'username', 'नमस्ते साथी!');
-      }
-    }
+    }, 0);
   });
 }
 

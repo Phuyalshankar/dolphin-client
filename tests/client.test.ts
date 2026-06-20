@@ -91,6 +91,20 @@ describe('DolphinClient — constructor', () => {
     const c = new DolphinClient('http://localhost:3000');
     expect(c.deviceId).toMatch(/^web_/);
   });
+
+  test('constructor overload: options as second argument', () => {
+    const c = new DolphinClient('http://localhost:3000', { debug: true, timeout: 999 });
+    expect(c.options.debug).toBe(true);
+    expect(c.options.timeout).toBe(999);
+    expect(c.deviceId).toMatch(/^web_/);
+  });
+
+  test('constructor overload: options as first argument', () => {
+    const c = new DolphinClient({ debug: true, timeout: 888 });
+    expect(c.options.debug).toBe(true);
+    expect(c.options.timeout).toBe(888);
+    expect(c.deviceId).toMatch(/^web_/);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

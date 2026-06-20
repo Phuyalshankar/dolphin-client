@@ -122,9 +122,23 @@ export class APIHandler {
             const baseEl = document.querySelector('base[href]');
             if (baseEl) {
                 const href = baseEl.getAttribute('href') || '';
-                if (href && href !== '/') {
-                    const cleanHref = href.endsWith('/') ? href.slice(0, -1) : href;
-                    baseUrl = `${this.client.httpUrl}${cleanHref.startsWith('/') ? cleanHref : '/' + cleanHref}`;
+                if (href) {
+                    try {
+                        // Extract only the pathname to avoid prefixing with absolute origins (e.g. http://127.0.0.1:5501/)
+                        const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+                        const resolvedUrl = new URL(href, origin);
+                        const pathName = resolvedUrl.pathname;
+                        if (pathName && pathName !== '/') {
+                            const cleanPath = pathName.endsWith('/') ? pathName.slice(0, -1) : pathName;
+                            baseUrl = `${this.client.httpUrl}${cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath}`;
+                        }
+                    } catch (e) {
+                        // Fallback for simple relative paths if URL parsing fails
+                        if (href !== '/' && !href.startsWith('http://') && !href.startsWith('https://')) {
+                            const cleanHref = href.endsWith('/') ? href.slice(0, -1) : href;
+                            baseUrl = `${this.client.httpUrl}${cleanHref.startsWith('/') ? cleanHref : '/' + cleanHref}`;
+                        }
+                    }
                 }
             } else {
                 // Auto-detect subdirectory if not matching host exactly
@@ -337,10 +351,12 @@ export class APIHandler {
 
             clearTimeout(timeoutId);
 
-            // Auto-refresh: 401 + not a retry + autoRefreshToken enabled
+            // Auto-refresh: 401 + not a retry + autoRefreshToken enabled + not an auth endpoint
+            const isAuthRoute = path.includes('/api/auth/login') || path.includes('/api/auth/refresh') || path.includes('/api/auth/logout');
             if (
                 response.status === 401 &&
                 !_isRetry &&
+                !isAuthRoute &&
                 this.client.options.autoRefreshToken
             ) {
                 const refreshed = await this.client.auth._silentRefresh();

@@ -185,13 +185,15 @@ describe('v2.0 Advanced Integrated Capabilities', () => {
       } as any;
     }
     (global as any).document = {
+      querySelector: jest.fn().mockReturnValue(null),
       querySelectorAll: jest.fn().mockImplementation((sel) => {
         if (sel === '[data-i18n-key]') return docElements.filter(e => e.hasAttribute('data-i18n-key'));
         if (sel === '[data-i18n-dict]') return docElements.filter(e => e.hasAttribute('data-i18n-dict'));
         return [];
       }),
       addEventListener: jest.fn(),
-      createElement: jest.fn().mockImplementation((tag) => new MockElement(tag))
+      createElement: jest.fn().mockImplementation((tag) => new MockElement(tag)),
+      head: { insertBefore: jest.fn() }
     };
     (global as any).requestAnimationFrame = (cb: () => void) => cb();
     c = new DolphinClient('http://localhost:3000');

@@ -171,7 +171,9 @@ export class DolphinOffline {
     const mutations = await this.getMutations();
     if (mutations.length === 0) return;
 
-    console.log(`[Dolphin Offline] Syncing ${mutations.length} queued mutations...`);
+    if (this.client.options?.debug) {
+      console.log(`[Dolphin Offline] Syncing ${mutations.length} queued mutations...`);
+    }
 
     for (const mutation of mutations) {
       try {

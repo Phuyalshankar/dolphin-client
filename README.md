@@ -216,17 +216,24 @@ Manage local stores, calculate math, toggle boolean logic, and run database coll
 <button data-store-click="products.sort('price', false)">Sort by Price Desc</button>
 <button data-store-click="products.clearFilters()">Reset</button>
 
-<!-- 4. Execute database mutations (DOM updates automatically!) -->
-<div data-rt-bind="store/products" data-rt-template="#product-list"></div>
-<template id="product-list">
-  {#each items as item}
-    <div>
-      <span>{{item.name}}</span>
-      <button data-store-click="products.deleteById(item.id)">Delete</button>
-    </div>
-  {/each}
+<!-- 4. Execute database mutations and display list (Rendered automatically without #each!) -->
+<div data-rt-bind="store/products" data-rt-template="#product-item"></div>
+
+<!-- Since the template has no {#each} block, Dolphin automatically detects the items/list array inside the store payload and repeats this template for each element! -->
+<template id="product-item">
+  <div class="product-card">
+    <span>{{name}}</span>
+    <span>${{price}}</span>
+    <button data-store-click="products.deleteById(id)">Delete</button>
+  </div>
 </template>
 ```
+
+### 4.5. SPA Viewport Router Error Clearing (New in v2.0!)
+When transitioning pages in Single Page Applications (SPA), Dolphin automatically resets all stale validation errors in the `errors` store to `null`, ensuring you always start with clean validation forms on new page loads.
+
+### 4.6. Flexible Token Parsing in SPA Hash Routing
+Dolphin's authentication helper modules can parse credentials and reset-password tokens from both standard search parameters (`?token=...`) and SPA hash-routing query parameters (`#/components/reset-password.html?token=...`) seamlessly.
 
 ### 5. JavaScript Store API & React Integration
 Query and filter dynamic database collections programmatically in JS, run optimistic updates, track loading state, or sync with React with zero state hooks:

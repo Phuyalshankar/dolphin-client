@@ -8,9 +8,11 @@ describe('DolphinClient — Universal Backend Compatibility', () => {
         (global as any).document = {
             querySelector: jest.fn().mockReturnValue(null),
             querySelectorAll: jest.fn().mockReturnValue([]),
+            createElement: jest.fn().mockReturnValue({ href: '' }),
+            head: { insertBefore: jest.fn() },
             cookie: '',
         };
-        (global as any).window = global;
+        (global as any).window = { location: { origin: 'http://localhost' } };
         client = new DolphinClient('http://localhost:3000');
     });
 

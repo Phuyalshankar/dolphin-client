@@ -5,3 +5,14 @@ tsconfig.json
 .npmignore
 .env
 *.log
+# @fix: Exclude large documentation and test files from npm package to reduce install size
+tests/
+components/
+*.tgz
+test_demo.html
+store-html-guide.html
+store-usage-guide.html
+storetutorial.md
+fulltutorial.md
+dolphin-client.js
+index.html

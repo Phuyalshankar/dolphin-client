@@ -1,28 +1,51 @@
 import { APIHandler } from './api';
 import { AuthHandler } from './auth';
 import { DolphinStore } from './store';
+import type {
+    DolphinClientOptions,
+    StorageAdapter,
+    AttachedListener,
+    TopicCallback,
+    SignalMessage,
+    FileMetadata,
+    BinaryFrame,
+} from './types';
 
 export class DolphinClient {
     host: string;
     httpUrl: string;
     deviceId: string;
-    options: any;
-    socket: any;
-    storage: any;
+    options: DolphinClientOptions;
+    socket: WebSocket | null;
+    storage: StorageAdapter;
     accessToken: string | null;
-    api: any;
-    auth: any;
-    store: any;
-    handlers: Map<string, Set<any>>;
-    signalHandlers: Set<any>;
-    fileHandlers: Set<any>;
+    api: APIHandler;
+    auth: AuthHandler;
+    store: DolphinStore;
+    handlers: Map<string, Set<TopicCallback>>;
+    signalHandlers: Set<(msg: SignalMessage) => void>;
+    fileHandlers: Set<(meta: FileMetadata) => void>;
     _offlineQueue: string[];
     reconnectAttempts: number;
     /** @fix: Store timer ID so disconnect() can cancel pending reconnects (was: memory/logic leak) */
     _reconnectTimer: ReturnType<typeof setTimeout> | null;
-    _attachedListeners: { target: any; event: string; cb: any }[];
+    _attachedListeners: AttachedListener[];
 
-    constructor(url = '', deviceId = '', options = {}) {
+    constructor(
+        urlArg: string | Partial<DolphinClientOptions> = '',
+        deviceIdArg: string | Partial<DolphinClientOptions> = '',
+        optionsArg: Partial<DolphinClientOptions> = {}
+    ) {
+        let url = typeof urlArg === 'string' ? urlArg : '';
+        let deviceId = typeof deviceIdArg === 'string' ? deviceIdArg : '';
+        let options = optionsArg;
+
+        if (typeof urlArg === 'object' && urlArg !== null) {
+            options = urlArg;
+        } else if (typeof deviceIdArg === 'object' && deviceIdArg !== null) {
+            options = deviceIdArg;
+        }
+
         if (!url && typeof window !== 'undefined') url = window.location.host;
 
         let protocol = 'http:';
@@ -154,24 +177,24 @@ export class DolphinClient {
             const protocol = this.httpUrl.startsWith('https') ? 'wss:' : 'ws:';
             const wsUrl    = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
 
-            console.log(`[Dolphin] Connecting to ${wsUrl}...`);
+            if (this.options.debug) console.log(`[Dolphin] Connecting to ${wsUrl}...`);
             this.socket = new WebSocket(wsUrl);
             // Enable binary frame reception for ESP8266 / IoT binary protocol
             this.socket.binaryType = 'arraybuffer';
 
             this.socket.onopen = () => {
-                console.log(`[Dolphin] Connected as "${this.deviceId}" 🐬`);
+                if (this.options.debug) console.log(`[Dolphin] Connected as "${this.deviceId}" 🐬`);
                 this.reconnectAttempts = 0;
                 this._flushOfflineQueue();
                 resolve();
             };
             this.socket.onmessage = (ev) => this._handleMessage(ev.data);
             this.socket.onclose   = () => {
-                console.warn('[Dolphin] Connection closed');
+                if (this.options.debug) console.warn('[Dolphin] Connection closed');
                 this._maybeReconnect();
             };
             this.socket.onerror = (err) => {
-                console.error('[Dolphin] WebSocket error:', err);
+                if (this.options.debug) console.error('[Dolphin] WebSocket error:', err);
                 reject(err);
             };
         });
@@ -400,14 +423,14 @@ export class DolphinClient {
         if (this.reconnectAttempts < this.options.maxReconnect) {
             this.reconnectAttempts++;
             const delay = Math.pow(2, this.reconnectAttempts) * 1000;
-            console.log(`[Dolphin] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})...`);
+            if (this.options.debug) console.log(`[Dolphin] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})...`);
             // @fix: Store timer ID so disconnect() can cancel it (was: timer fired after explicit disconnect)
             this._reconnectTimer = setTimeout(() => {
                 this._reconnectTimer = null;
                 this.connect().catch(() => {});
             }, delay);
         } else {
-            console.error('[Dolphin] Max reconnect attempts reached.');
+            if (this.options.debug) console.error('[Dolphin] Max reconnect attempts reached.');
         }
     }
 
