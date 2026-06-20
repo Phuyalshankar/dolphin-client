@@ -29,7 +29,7 @@ By breathing life back into standard HTML, we have resurrected the simplicity of
 
 ## Features
 
-- **Universal Backend Compatibility**: Native out-of-the-box support for PHP (Laravel, CakePHP, WordPress) and Node.js (Express, NestJS, Fastify). Auto-extracts/injects CSRF tokens and nonces, normalizes multi-format validation error payloads directly into reactive forms, and supports HTTP method spoofing (`_method`) and subfolder base URLs automatically.
+- **Universal Backend Compatibility**: Native out-of-the-box support for PHP (Laravel, CakePHP, WordPress) and Node.js (Express, NestJS, Fastify). Auto-extracts/injects CSRF tokens and nonces, automatically normalizes multi-format validation error payloads (including **Zod schemas, Express-validator, and Laravel validator** structures) directly into reactive form fields, and supports HTTP method spoofing (`_method`) and subfolder base URLs automatically.
 - **HTML Component Imports (`data-import`)**: Declaratively import reusable layouts (e.g. `header.html`, `footer.html`) dynamically in pure HTML with robust concurrent promise caching, nested rendering, and circular dependency checks.
 - **Instant SPA Viewport Router (`data-spa`)**: Converts static pages into highly responsive Single Page Applications (SPAs) with zero manual JS. High-jacks links, swaps viewports dynamically with smooth fading transitions, and updates page titles and history navigation (`popstate`).
 - **Hookless Reactivity**: Bind topics to DOM elements via HTML data attributes—no React, Vue, or Angular state management required.

@@ -900,7 +900,7 @@ If `methodSpoofing: true` is configured in `options`, or a hidden `<input type="
 Different backends output validation errors in different structures. Dolphin Client includes a **Universal Error Adapter** that normalizes all formats into a flat `{ [field]: errorMessage }` object, then automatically publishes them to state `errors/{field}`:
 - **Laravel / Yii Format**: `{ errors: { email: ["Must be valid email"] } }` → `errors/email` is updated.
 - **CakePHP Format**: `{ errors: { email: { _required: "Email is required" } } }` → `errors/email` is updated.
-- **Node.js (Joi/Yup/Express-Validator) Format**: `[ { path: "email", msg: "Invalid email" } ]` → `errors/email` is updated.
+- **Node.js (Zod / Joi / Yup / Express-Validator) Format**: `[ { path: "email", msg: "Invalid email" } ]` or `{ errors: { email: "Invalid email" } }` → `errors/email` is updated.
 
 This means you can display server-side validation errors in HTML instantly with **zero JavaScript**:
 ```html
