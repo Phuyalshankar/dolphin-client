@@ -224,7 +224,7 @@ export function attachRTBindings(clientProto: any) {
             if (template && typeof processedPayload === 'object' && processedPayload !== null) {
                 // Auto-detect if context is likely needed
                 const hasNestedPaths = template.match(/\w+\.\w+/g);
-                const hasChildDataBindings = el.querySelector('[data-api-*,data-store-*,data-rt-click]');
+                const hasChildDataBindings = el.querySelector('[data-api-]') || el.querySelector('[data-store-]') || el.querySelector('[data-rt-click]');
                 const needsContext = (hasNestedPaths && hasChildDataBindings) || 
                                      (el.getAttribute('data-rt-template')?.startsWith('#') && hasNestedPaths);
                 
