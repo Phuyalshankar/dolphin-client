@@ -234,7 +234,8 @@ export function attachRouter(clientProto: any) {
             this.addDomListener(document, 'click', (e: any) => {
                 const anchor = e.target.closest('a');
                 if (!anchor) return;
-                if (!anchor.hasAttribute('data-spa')) return;
+                // Check for static data-spa attribute OR dynamically set via dataset
+                if (!anchor.hasAttribute('data-spa') && !anchor.dataset.spa) return;
 
                 const href = anchor.getAttribute('href');
                 if (!href || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;

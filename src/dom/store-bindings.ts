@@ -110,9 +110,14 @@ export function attachStoreBindings(clientProto: any) {
                             Object.keys(parsed).forEach(key => {
                                 this.setStoreState(storeName, key, parsed[key]);
                             });
+                        } else {
+                            console.error(`[Dolphin Store Init Error] JSON inside <dolphin-store name="${storeName}"> must be an object. Got: ${typeof parsed}`);
                         }
-                    } catch (err) {
-                        console.error(`[Dolphin Store Init Error] Failed to parse JSON inside <dolphin-store name="${storeName}">:`, err);
+                    } catch (err: any) {
+                        console.error(`[Dolphin Store Init Error] Failed to parse JSON inside <dolphin-store name="${storeName}">`);
+                        console.error(`  Content: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
+                        console.error(`  Error: ${err.message}`);
+                        console.error(`  Hint: Make sure JSON is wrapped in curly braces { } and has valid syntax`);
                     }
                 }
             }
@@ -313,7 +318,7 @@ export function attachStoreBindings(clientProto: any) {
 
         try {
             const fn = new Function('ctx', `with(ctx) { ${expression} }`);
-            fn(context);
+            fn.call(element, context);
         } catch (err) {
             console.error('%c[Dolphin Store Action Error]:', 'color: #ef4444; font-weight: bold;', err);
             if (element) console.error('%cFailed Element:', 'color: #f97316; font-weight: bold;', element);

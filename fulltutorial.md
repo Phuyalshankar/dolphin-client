@@ -230,7 +230,60 @@ This example displays a dynamic list of real-time notifications. It automaticall
 
 ---
 
-### ३.३.३. Declarative Nested Array Auto-Looping (No-JS, No-{#each}!) (डिक्लारेटिभ नेस्टेड एरे स्वतः लुपिङ)
+### ३.३.३. Array Rendering: Two Approaches (एरे रेन्डरिङ: दुई तरिका)
+
+Dolphin Client मा array render गर्न दुई तरिका छन्:
+
+#### Approach 1: Svelte-style `{#each}` Loop (Explicit Looping)
+जब तपाईंले template भित्र complex logic, nested conditionals, वा custom rendering चाहनुहुन्छ:
+
+```html
+<div data-rt-bind="store/menu" data-rt-template='
+  {#each items as item}
+    <a href="{item.href}" data-spa>
+      <span>{item.icon}</span>
+      <span>{item.label}</span>
+    </a>
+  {/each}
+'></div>
+```
+
+**Use when:**
+- Complex template logic needed
+- Nested conditionals inside loop
+- Custom rendering per item
+- Loop index needed (`{#each items as item, index}`)
+
+#### Approach 2: Auto-Looping with Template (Implicit Looping)
+जब तपाईंले simple list render गर्न चाहनुहुन्छ:
+
+```html
+<div data-rt-bind="store/menu" data-rt-template="#menu-item"></div>
+
+<template id="menu-item">
+  <a href="{{href}}" data-spa>
+    <span>{{icon}}</span>
+    <span>{{label}}</span>
+  </a>
+</template>
+```
+
+**Use when:**
+- Simple list rendering
+- No complex logic needed
+- Clean separation of template
+- Better syntax highlighting
+
+**Key Differences:**
+| Feature | `{#each}` Loop | Auto-Looping |
+|---------|---------------|--------------|
+| Syntax | `{item.field}` | `{{field}}` |
+| Logic | Complex conditions | Simple only |
+| Template | Inline string | Separate `<template>` |
+| Performance | Slightly faster | Same |
+| Best for | Complex lists | Simple lists |
+
+### ३.३.४. Declarative Nested Array Auto-Looping (No-JS, No-{#each}!) (डिक्लारेटिभ नेस्टेड एरे स्वतः लुपिङ)
 Often, your WebSocket payload or REST API response returns an object containing a list/array (e.g., `{ items: [...] }` or `{ list: [...] }`). 
 
 Dolphin Client allows you to bind directly to this store or topic and automatically render list templates **without writing any Svelte-style `{#each}` loops or manual JavaScript `map()` loops**. 

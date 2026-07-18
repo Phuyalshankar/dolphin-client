@@ -20,6 +20,7 @@ export function attachRTBindings(clientProto: any) {
         let processedPayload = payload;
         if (typeof payload === 'object' && payload !== null) {
             const applyFilterSearchSort = (arr: any[]) => {
+                if (!Array.isArray(arr)) return [];
                 let result = [...arr];
 
                 // 1. Declarative Filtering
@@ -136,10 +137,10 @@ export function attachRTBindings(clientProto: any) {
         const elements = document.querySelectorAll(`[data-rt-bind="${topic}"]`);
         elements.forEach(el => {
             const processedPayload = this._applyDeclarativeDirectives(el, payload);
+            (el as any)._rtContext = processedPayload;
 
             // Context mode — propagate data to child nodes via data-rt-text, data-rt-html etc.
             if (el.getAttribute('data-rt-type') === 'context' && typeof processedPayload === 'object' && processedPayload !== null) {
-                (el as any)._rtContext = processedPayload;
 
                 const BOOL_ATTRS = new Set([
                     'disabled','checked','readonly','required','hidden','selected','multiple',
@@ -221,6 +222,17 @@ export function attachRTBindings(clientProto: any) {
             const template = resolveTemplate(el);
 
             if (template && typeof processedPayload === 'object' && processedPayload !== null) {
+                // Auto-detect if context is likely needed
+                const hasNestedPaths = template.match(/\w+\.\w+/g);
+                const hasChildDataBindings = el.querySelector('[data-api-*,data-store-*,data-rt-click]');
+                const needsContext = (hasNestedPaths && hasChildDataBindings) || 
+                                     (el.getAttribute('data-rt-template')?.startsWith('#') && hasNestedPaths);
+                
+                if (needsContext && !el.hasAttribute('data-rt-type')) {
+                    console.warn(`[Dolphin Template Warning] Element with template "${el.getAttribute('data-rt-template')}" likely needs data-rt-type="context" for nested data access.`);
+                    console.warn(`  Hint: Add data-rt-type="context" to enable context drilling for child elements.`);
+                }
+
                 let arrayToRender = null;
                 if (Array.isArray(processedPayload)) {
                     arrayToRender = processedPayload;
@@ -234,11 +246,46 @@ export function attachRTBindings(clientProto: any) {
                 }
 
                 if (arrayToRender) {
-                    let combinedHTML = '';
-                    for (const item of arrayToRender) {
-                        combinedHTML += renderTemplate(template, item);
+                    if (el.getAttribute('data-rt-virtual') === 'true') {
+                        if (!(el as any)._virtualListenerWired) {
+                            (el as any)._virtualListenerWired = true;
+                            el.addEventListener('scroll', () => {
+                                this._updateDOM(topic, payload);
+                            });
+                            const computedStyle = window.getComputedStyle(el);
+                            if (computedStyle.overflowY === 'visible' || computedStyle.overflow === 'visible') {
+                                (el as HTMLElement).style.overflowY = 'auto';
+                                if (computedStyle.position === 'static') {
+                                    (el as HTMLElement).style.position = 'relative';
+                                }
+                            }
+                        }
+
+                        const itemHeight = Number(el.getAttribute('data-rt-item-height')) || 150;
+                        const buffer = Number(el.getAttribute('data-rt-buffer')) || 5;
+                        const scrollTop = el.scrollTop || 0;
+                        const containerHeight = el.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 0) || 768;
+
+                        const totalCount = arrayToRender.length;
+                        const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - buffer);
+                        const endIndex = Math.min(totalCount, Math.ceil((scrollTop + containerHeight) / itemHeight) + buffer);
+
+                        const topHeight = startIndex * itemHeight;
+                        const bottomHeight = Math.max(0, (totalCount - endIndex) * itemHeight);
+
+                        let combinedHTML = `<div class="rt-virtual-spacer-top" style="height: ${topHeight}px; width: 100%; pointer-events: none;"></div>`;
+                        for (let i = startIndex; i < endIndex; i++) {
+                            combinedHTML += renderTemplate(template, arrayToRender[i]);
+                        }
+                        combinedHTML += `<div class="rt-virtual-spacer-bottom" style="height: ${bottomHeight}px; width: 100%; pointer-events: none;"></div>`;
+                        scheduleDOMUpdate(el, combinedHTML);
+                    } else {
+                        let combinedHTML = '';
+                        for (const item of arrayToRender) {
+                            combinedHTML += renderTemplate(template, item);
+                        }
+                        scheduleDOMUpdate(el, combinedHTML);
                     }
-                    scheduleDOMUpdate(el, combinedHTML);
                 } else {
                     scheduleDOMUpdate(el, renderTemplate(template, processedPayload));
                 }
