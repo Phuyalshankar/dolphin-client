@@ -71,6 +71,49 @@ export function attachRouter(clientProto: any) {
                 }
             }
 
+            // Scan for <dolphin-store> tags in the entire document (not just viewport)
+            // This ensures global stores from store.html are always available
+            const allStoreElements = document.querySelectorAll('dolphin-store');
+            if (allStoreElements.length > 0) {
+                this.uiStores = this.uiStores || new Map();
+                allStoreElements.forEach((el: any) => {
+                    const storeName = el.getAttribute('name') || el.getAttribute('data-store');
+                    if (!storeName) return;
+                    if (!this.uiStores.has(storeName)) {
+                        this.uiStores.set(storeName, {});
+                    }
+                    const store = this.uiStores.get(storeName);
+                    // Parse attributes as store values (only if not already set)
+                    if (el.attributes) {
+                        const excludeAttrs = ['name', 'data-store', 'style', 'data-rt-bind', 'data-rt-type', 'template'];
+                        Array.from(el.attributes).forEach((attr: any) => {
+                            if (!excludeAttrs.includes(attr.name)) {
+                                // Only set if not already in store (preserve existing data)
+                                if (store[attr.name] === undefined) {
+                                    let val: any = attr.value;
+                                    if (val === 'true') val = true;
+                                    else if (val === 'false') val = false;
+                                    else if (val === 'null') val = null;
+                                    else if (!isNaN(Number(val)) && val.trim() !== '') val = Number(val);
+                                    store[attr.name] = val;
+                                }
+                            }
+                        });
+                    }
+                    // Set up reactivity if element has children
+                    if (el.children && el.children.length > 0) {
+                        el.setAttribute('data-rt-bind', `store/${storeName}`);
+                        el.setAttribute('data-rt-type', 'context');
+                    }
+                    // Publish store data to trigger reactivity
+                    this.publish(`store/${storeName}`, store);
+                });
+                // Trigger DOM update for all stores
+                this.uiStores.forEach((store: any, storeName: string) => {
+                    this._updateDOM(`store/${storeName}`, store);
+                });
+            }
+
             this._scanStoreBinds();
             this._scanAndFetchAPIBinds();
             this._scanVFSBinds();
@@ -217,7 +260,7 @@ export function attachRouter(clientProto: any) {
             this.addDomListener(document, 'click', (e: any) => {
                 const anchor = e.target.closest('a');
                 if (!anchor) return;
-                if (!anchor.hasAttribute('data-spa') && anchor.getAttribute('data-spa') !== 'true') return;
+                if (!anchor.hasAttribute('data-spa')) return;
 
                 const href = anchor.getAttribute('href');
                 if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;

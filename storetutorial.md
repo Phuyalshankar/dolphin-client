@@ -6,19 +6,102 @@
 
 ## १. Core Concept (मुख्य धारणा)
 
-डल्फिनमा २ प्रकारका स्टोरहरू हुन्छन्:
+डल्फिनमा ३ प्रकारका स्टोरहरू हुन्छन्:
 
 | स्टोर प्रकार (Store Type) | के काम गर्छ? (What it does) | उदाहरण (Example) |
 | :--- | :--- | :--- |
-| **१. UI Store (स्थानीय स्टोर)** | ब्राउजरको लोकल स्टेट (Local State) व्यवस्थापन गर्छ। जस्तै: बटन थिच्दा Modal खोल्ने, Form देखाउने/लुकाउने, काउन्टर बढाउने आदि। | `store/app` (जस्तै: `isAdding`, `editId`) |
-| **२. Database Store (डेटाबेस स्टोर)** | ब्याकइन्ड सर्भर वा डेटाबेसको डेटालाई रियल-टाइममा सिंक (Sync) गर्छ। | `store/products` (जस्तै: उत्पादनहरूको सूची) |
+| **१. Global Store (ग्लोबल स्टोर)** | सबै pages मा accessible हुने shared state। `store.html` मा define गरिन्छ। | `store/global` (जस्तै: user profile, settings) |
+| **२. UI Store (स्थानीय स्टोर)** | ब्राउजरको लोकल स्टेट (Local State) व्यवस्थापन गर्छ। जस्तै: बटन थिच्दा Modal खोल्ने, Form देखाउने/लुकाउने, काउन्टर बढाउने आदि। | `store/app` (जस्तै: `isAdding`, `editId`) |
+| **३. Database Store (डेटाबेस स्टोर)** | ब्याकइन्ड सर्भर वा डेटाबेसको डेटालाई रियल-टाइममा सिंक (Sync) गर्छ। | `store/products` (जस्तै: उत्पादनहरूको सूची) |
 
 > [!IMPORTANT]
 > **डल्फिनको सिद्धान्त**: HTML भित्रै एट्रिब्युटहरू (`data-*`) लेखेर बिना कुनै अतिरिक्त जाभास्क्रिप्ट कोड स्टेट म्यानेजमेन्ट गर्नु हो।
 
 ---
 
-## २. UI Store: Step-by-Step counter Example (० बाट काउन्टर बनाउने)
+## २. Global Store: store.html बाट सबै Pages मा Data Share गर्ने
+
+Global Store ले तपाईंलाई एउटा केन्द्रीय फाइल (`store.html`) मा store define गरेर सबै pages मा त्यो data access गर्न दिन्छ। यो user profile, settings, वा कुनै पनि shared data को लागि उपयुक्त छ।
+
+### Step 1: store.html बनाउने
+
+पहिले एउटा `store.html` फाइल बनाउनुहोस् र global store define गर्नुहोस्:
+
+```html
+<!-- store.html -->
+<dolphin-store name="global" data-api-get="https://jsonplaceholder.typicode.com/users/1">
+  <!-- Hidden container for reactivity -->
+</dolphin-store>
+```
+
+**Key Points:**
+- `name="global"` - Store को नाम
+- `data-api-get="..."` - API बाट data automatically fetch गर्ने (optional)
+- Child element राख्नुपर्छ reactivity को लागि
+
+### Step 2: index.html मा store.html import गर्ने
+
+```html
+<!-- index.html -->
+<body data-router-mode="hash" data-router-viewport="main" data-router-transitions="true">
+   <!-- Global Store - सबै pages मा accessible -->
+   <div data-import="./store.html"></div>
+
+   <div data-import="./components/header.html"></div>
+   <main id="viewport">
+     <div data-import="./pages/home.html"></div>
+   </main>
+   <div data-import="./components/footer.html"></div>
+</body>
+```
+
+### Step 3: कुनै पनि Page मा Global Store Use गर्ने
+
+```html
+<!-- pages/about.html -->
+<div data-rt-bind="store/global" data-rt-type="context">
+  <div class="card">
+    <h3 data-rt-text="name"></h3>
+    <p>Username: <span data-rt-text="username"></span></p>
+    <p>Email: <span data-rt-text="email"></span></p>
+  </div>
+</div>
+```
+
+**Key Directives:**
+- `data-rt-bind="store/global"` - Global store सँग bind गर्ने
+- `data-rt-type="context"` - Context mode enable गर्ने
+- `data-rt-text="fieldName"` - Store field बाट text display गर्ने
+
+### Global Store को फाइदाहरू (Advantages):
+- **Single Source of Truth**: सबै pages मा same data accessible
+- **Page Navigation मा Persist**: Page navigate गर्दा store data बनेकै रहन्छ
+- **API Integration**: `data-api-get` ले automatically data fetch गर्छ
+- **No JavaScript Required**: Pure HTML attributes मात्र
+
+### Global Store मा Static Data Seed गर्ने (API बिना):
+
+```html
+<!-- store.html -->
+<dolphin-store name="global">
+  {
+    "username": "Shankar",
+    "role": "Admin",
+    "email": "shankar@example.com"
+  }
+</dolphin-store>
+```
+
+### Global Store मा Manual Data Update गर्ने:
+
+```html
+<!-- कुनै page मा -->
+<button data-store-click="global.username = 'NewUser'">Update Username</button>
+```
+
+---
+
+## ३. UI Store: Step-by-Step counter Example (० बाट काउन्टर बनाउने)
 
 काउन्टर बनाउन हामीलाई एउटा नम्बर स्टोर गर्ने स्टेट र त्यसलाई बढाउने/घटाउने बटन चाहिन्छ।
 
@@ -45,7 +128,7 @@
 
 ---
 
-## ३. Dynamic Modal / Toggle Example (मोडल खोल्ने र बन्द गर्ने)
+## ४. Dynamic Modal / Toggle Example (मोडल खोल्ने र बन्द गर्ने)
 
 पेजमा कुनै कुरालाई देखाउन वा लुकाउन कन्डिसनल स्टेट (`true` वा `false`) चाहिन्छ।
 
@@ -74,7 +157,7 @@
 
 ---
 
-## ४. Unified Add/Update Form (एकै फर्मबाट थप्ने र सम्पादन गर्ने)
+## ५. Unified Add/Update Form (एकै फर्मबाट थप्ने र सम्पादन गर्ने)
 
 तपाईंले भर्खरै `home.html` मा प्रयोग गर्नुभएको एउटै फर्मले कसरी दुवै थप्ने (Add) र अपडेट गर्ने (Update) काम गर्छ, त्यसको रहस्य यहाँ छ:
 
@@ -150,7 +233,7 @@
 
 ---
 
-## ५. Debugging UI Stores: `log()` Helper (डेटा सजिलै कन्सोलमा हेर्ने)
+## ६. Debugging UI Stores: `log()` Helper (डेटा सजिलै कन्सोलमा हेर्ने)
 
 डल्फिन क्लाइन्टमा कुनै पनि स्टोर वा लोकल चलराशि (Variable) को डेटा ब्राउजर कन्सोलमा सफासँग हेर्नको लागि एउटा बिल्ट-इन **`log()`** फङ्ग्सन उपलब्ध गराइएको छ। 
 

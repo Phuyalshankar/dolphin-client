@@ -27,12 +27,27 @@ npm install dolphin-client
 ```
 
 ### Script Tag Integration (Browser-Native IIFE)
-For static websites or plain HTML files, copy `node_modules/dolphin-client/dist/dolphin-client.js` and load it via a script tag:
+For static websites or plain HTML files, copy `node_modules/dolphin-client/dist/dolphin-client.js` and load it via a script tag. Dolphin Client auto-initializes with zero configuration:
+
+```html
+<!-- Router configuration via body attributes -->
+<body data-router-mode="hash" data-router-viewport="main" data-router-transitions="true">
+
+<!-- Dolphin Client auto-initializes on DOMContentLoaded -->
+<script src="dist/dolphin-client.js"></script>
+```
+
+**Body Attributes Options:**
+- `data-router-mode="hash"` - Hash routing (#/about.html) or `"history"` (clean URLs)
+- `data-router-viewport="main"` - Which element the router swaps content into
+- `data-router-transitions="true"` - Enable fade transitions between pages
+
+**Manual Initialization (Optional):**
+If you need custom configuration, you can still initialize manually:
 
 ```html
 <script src="dist/dolphin-client.js"></script>
 <script>
-  // Access through the global DolphinModule namespace
   const dolphin = new DolphinModule.DolphinClient('http://localhost:3000', 'ROOM_101');
   dolphin.connect();
 </script>
@@ -344,9 +359,14 @@ export default async function IntercomPage() {
   return (
     <div className="container">
       <h1>Dolphin Intercom Console</h1>
+
+      {/* Seed server-fetched data into Dolphin Store for client-side state hydration */}
+      <dolphin-store name="devices">
+        {JSON.stringify({ online: initialDevices })}
+      </dolphin-store>
       
       {/* 1. Renders statically on the server so search engines see it instantly for SEO! */}
-      <div id="online-directory" data-rt-bind="devices/online" data-rt-template='
+      <div id="online-directory" data-rt-bind="store/devices" data-rt-template='
         <div data-rt-type="context" class="card">
           <span class="status-dot"></span>
           <span class="id-label">{{id}}</span>
@@ -481,6 +501,33 @@ To ensure maximum performance and maintain UI state (like input focus, text sele
 
 - **Automatic Selective Patching**: When new data arrives, Dolphin compiles the template in memory, diffs it against the live DOM, and selectively updates only the modified text, attributes, or nodes instead of wiping the entire container.
 - **60fps Batched Updates (`scheduleDOMUpdate`)**: High-frequency writes are automatically debounced and batched into browser `requestAnimationFrame` render cycles, completely preventing layout thrashing and stutter.
+
+---
+
+## ८.१. Declarative Virtual Scroll Rendering (डिक्लेरेटिभ भर्चुअल स्क्रोल रेन्डरिङ)
+
+When displaying massive datasets (such as 10,000+ products, feeds, or logs), rendering all items directly in the DOM degrades browser performance, creates layout lag, and triggers memory bottlenecks. 
+
+Dolphin Client features a built-in, zero-config **Declarative Virtual Scrolling engine** that dynamically limits rendering to the active viewport window:
+
+- **In-Memory Operations**: Search, filtering, and sorting are executed on the raw JavaScript array in milliseconds *before* DOM compilation.
+- **Viewport Slicing**: Slices the filtered array to render only the visible subset in the DOM, adding top/bottom spacer divs to preserve native scrollbar size and behavior.
+- **Auto-Wired Listeners**: Automatically registers scroll listeners on the container to update visible slices during scroll events.
+
+### How to use (प्रयोग गर्ने तरिका):
+Simply add `data-rt-virtual="true"`, `data-rt-item-height="[height_in_pixels]"`, and `data-rt-buffer="[buffer_count]"` to your bound list container:
+
+```html
+<!-- १०,००० आइटम भए पनि सुपर-फास्ट र ल्याग-फ्री चल्छ -->
+<div data-rt-bind="store/products" 
+     data-rt-virtual="true" 
+     data-rt-item-height="250" 
+     data-rt-buffer="5"
+     style="height: 600px; overflow-y: auto;"
+     class="product-grid">
+  <!-- Svelte-style template here -->
+</div>
+```
 
 ---
 
