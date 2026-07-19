@@ -22,7 +22,14 @@ export function attachAPIBindings(clientProto: any) {
                 el.setAttribute('data-api-initialized', 'true');
             }
             try {
+                if (this.options?.debug) {
+                    console.log(`%c🐬 [Dolphin API Debug]: Fetching GET ${path}...`, 'color: #3b82f6; font-weight: bold;');
+                }
                 const result = await this.api.get(path);
+                if (this.options?.debug) {
+                    const count = Array.isArray(result) ? `${result.length} items` : typeof result;
+                    console.log(`%c🐬 [Dolphin API Debug]: Received ${count} from ${path}`, 'color: #10b981; font-weight: bold;', result);
+                }
 
                 const storeName = el.getAttribute('name') || el.getAttribute('data-store');
                 if (storeName) {

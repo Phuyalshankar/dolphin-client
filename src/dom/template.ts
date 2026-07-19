@@ -4,7 +4,7 @@
  * double mustaches {{expr}}, optional chaining, dynamic attribute interpolation.
  */
 
-import { evaluateExpression } from './helpers';
+import { evaluateExpression, getNestedValue } from './helpers';
 
 /** Render a Svelte-style template string with a given context object */
 export function preprocessJSX(templateStr: string): string {
@@ -14,7 +14,7 @@ export function preprocessJSX(templateStr: string): string {
     const kebabCase = (str: string) => str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
     const NATIVE_HTML_TAGS = new Set([
-        'html', 'body', 'head', 'link', 'meta', 'style', 'title', 'address', 'article', 'aside', 'footer', 'header', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'main', 'nav', 'section', 'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'hr', 'li', 'ol', 'p', 'pre', 'ul', 'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr', 'area', 'audio', 'img', 'map', 'track', 'video', 'embed', 'iframe', 'object', 'picture', 'portal', 'source', 'svg', 'math', 'canvas', 'noscript', 'script', 'del', 'ins', 'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend', 'meter', 'optgroup', 'option', 'select', 'textarea', 'details', 'dialog', 'menu', 'summary', 'template', 'g', 'path', 'rect', 'circle', 'line', 'polyline', 'polygon', 'ellipse', 'text', 'tspan', 'defs', 'use'
+        'html', 'body', 'head', 'link', 'meta', 'style', 'title', 'address', 'article', 'aside', 'footer', 'header', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'main', 'nav', 'section', 'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'hr', 'li', 'ol', 'p', 'pre', 'ul', 'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr', 'area', 'audio', 'img', 'map', 'track', 'video', 'embed', 'iframe', 'object', 'picture', 'portal', 'source', 'svg', 'math', 'canvas', 'noscript', 'script', 'del', 'ins', 'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend', 'meter', 'optgroup', 'option', 'select', 'textarea', 'details', 'dialog', 'menu', 'summary', 'template', 'g', 'path', 'rect', 'circle', 'line', 'polyline', 'polygon', 'ellipse', 'text', 'tspan', 'defs', 'use', 'dolphin-store', 'dolphin-router', 'dolphin-state', 'dolphin-component'
     ]);
 
     // Helper to convert a custom tag to icon spacer span
@@ -101,16 +101,8 @@ export function renderTemplate(templateStr: string, context: any): string {
         result = result.replace(/\{\{([\s\S]*?)\}\}/g, (match, expr) => {
             const trimmed = expr.trim();
             if (!trimmed) return '';
-            if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(?:(?:\??\.[a-zA-Z_$][a-zA-Z0-9_$]*))+$/.test(trimmed)) {
-                const parts = trimmed.split(/\??\./).filter(Boolean);
-                let val: any = context;
-                for (const part of parts) {
-                    if (val === undefined || val === null) { val = undefined; break; }
-                    val = val[part];
-                }
-                return val !== undefined && val !== null ? val : '';
-            }
-            return match;
+            const val = evaluateExpression(trimmed, context);
+            return val !== undefined && val !== null ? val : '';
         });
         // Resolve remaining nested paths: single curlies
         result = result.replace(/\{([^{}]+?)\}/g, (match, expr) => {
@@ -177,12 +169,13 @@ export function renderTemplate(templateStr: string, context: any): string {
             } else if (token.startsWith('{')) {
                 const expr = match[8];
                 if (expr) {
-                    // Check if expression contains HTML elements (JSX-like)
-                    if (expr.includes('<') && expr.includes('>')) {
-                        // It's a JSX-like expression, handle it as template string
+                    const trimmedExpr = expr.trim();
+                    const RESERVED = ['var', 'let', 'const', 'function', 'class', 'import', 'export', 'return', 'default', 'case', 'break', 'switch', 'try', 'catch', 'finally', 'delete', 'typeof', 'void', 'in', 'instanceof', 'do', 'while', 'for', 'if', 'else', 'new', 'this', 'super', 'extends', 'yield', 'await'];
+                    if (RESERVED.includes(trimmedExpr) || !/^[a-zA-Z_$][a-zA-Z0-9_$.?]*$/.test(trimmedExpr)) {
+                        compiled += `out += "${escapeString(token)}";\n`;
+                    } else if (expr.includes('<') && expr.includes('>')) {
                         compiled += `out += (${expr} !== undefined && ${expr} !== null ? String(${expr}) : "");\n`;
                     } else {
-                        // Regular expression
                         compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");\n`;
                     }
                 }
@@ -215,7 +208,6 @@ export function renderTemplate(templateStr: string, context: any): string {
         const fn = new Function('context', fnBody);
         return fn(safeContext);
     } catch (e) {
-        console.error('[Dolphin Template Compiler Error]:', e);
         let fallback = templateStr;
         for (let key in context) {
             const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -224,6 +216,10 @@ export function renderTemplate(templateStr: string, context: any): string {
                 context[key] !== undefined && context[key] !== null ? context[key] : ''
             );
         }
+        fallback = fallback.replace(/\{\{([\s\S]*?)\}\}/g, (m, expr) => {
+            const val = getNestedValue(context, expr.trim());
+            return val !== undefined && val !== null ? val : '';
+        });
         return fallback;
     }
 }

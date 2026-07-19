@@ -65,7 +65,7 @@ if (typeof window !== 'undefined') {
     setTimeout(() => {
       if (!(window as any).dolphin) {
         const scriptEl = document.querySelector('script[src*="client"]');
-        const debugMode = scriptEl ? scriptEl.getAttribute('data-debug') === 'true' : true;
+        const debugMode = scriptEl ? scriptEl.getAttribute('data-debug') === 'true' : false;
 
         const body = document.body;
         const routerMode = body ? body.getAttribute('data-router-mode') : null;

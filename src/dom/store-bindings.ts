@@ -70,6 +70,19 @@ export function attachStoreBindings(clientProto: any) {
             this.publish(`store/${storeName}`, store);
             if (typeof this._updateDOM === 'function') {
                 this._updateDOM(`store/${storeName}`, store);
+                if (typeof document !== 'undefined') {
+                    const dependentEls = document.querySelectorAll('[data-rt-filter],[data-rt-search],[data-rt-sort]');
+                    dependentEls.forEach((el: any) => {
+                        const bindTopic = el.getAttribute('data-rt-bind');
+                        if (bindTopic && bindTopic.startsWith('store/')) {
+                            const boundStoreName = bindTopic.replace('store/', '');
+                            const boundData = this.uiStores ? this.uiStores.get(boundStoreName) : undefined;
+                            if (Array.isArray(boundData) ? boundData.length > 0 : (typeof boundData === 'object' && boundData !== null && Object.keys(boundData).length > 0)) {
+                                this._updateDOM(bindTopic, boundData);
+                            }
+                        }
+                    });
+                }
             }
 
             // LocalStorage Auto-Persistence check
@@ -88,6 +101,19 @@ export function attachStoreBindings(clientProto: any) {
             this.publish(`store/${storeName}`, keyOrVal);
             if (typeof this._updateDOM === 'function') {
                 this._updateDOM(`store/${storeName}`, keyOrVal);
+                if (typeof document !== 'undefined') {
+                    const dependentEls = document.querySelectorAll('[data-rt-filter],[data-rt-search],[data-rt-sort]');
+                    dependentEls.forEach((el: any) => {
+                        const bindTopic = el.getAttribute('data-rt-bind');
+                        if (bindTopic && bindTopic.startsWith('store/')) {
+                            const boundStoreName = bindTopic.replace('store/', '');
+                            const boundData = this.uiStores ? this.uiStores.get(boundStoreName) : undefined;
+                            if (Array.isArray(boundData) ? boundData.length > 0 : (typeof boundData === 'object' && boundData !== null && Object.keys(boundData).length > 0)) {
+                                this._updateDOM(bindTopic, boundData);
+                            }
+                        }
+                    });
+                }
             }
 
             // LocalStorage Auto-Persistence check

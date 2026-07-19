@@ -139,8 +139,8 @@ export function attachRTBindings(clientProto: any) {
             const processedPayload = this._applyDeclarativeDirectives(el, payload);
             (el as any)._rtContext = processedPayload;
 
-            // Context mode — propagate data to child nodes via data-rt-text, data-rt-html etc.
-            if (el.getAttribute('data-rt-type') === 'context' && typeof processedPayload === 'object' && processedPayload !== null) {
+            // Context mode — propagate data to child nodes via data-rt-text, data-rt-html etc. (skip if data-rt-template is specified)
+            if (el.getAttribute('data-rt-type') === 'context' && !el.hasAttribute('data-rt-template') && typeof processedPayload === 'object' && processedPayload !== null) {
 
                 const BOOL_ATTRS = new Set([
                     'disabled','checked','readonly','required','hidden','selected','multiple',
@@ -222,17 +222,7 @@ export function attachRTBindings(clientProto: any) {
             const template = resolveTemplate(el);
 
             if (template && typeof processedPayload === 'object' && processedPayload !== null) {
-                // Auto-detect if context is likely needed
-                const hasNestedPaths = template.match(/\w+\.\w+/g);
-                const hasChildDataBindings = (typeof el.querySelector === 'function') && 
-                    (el.querySelector('[data-api-]') || el.querySelector('[data-store-]') || el.querySelector('[data-rt-click]'));
-                const needsContext = (hasNestedPaths && hasChildDataBindings) || 
-                                     (typeof el.getAttribute === 'function' && el.getAttribute('data-rt-template')?.startsWith('#') && hasNestedPaths);
-                
-                if (needsContext && typeof el.hasAttribute === 'function' && !el.hasAttribute('data-rt-type')) {
-                    console.warn(`[Dolphin Template Warning] Element with template "${el.getAttribute('data-rt-template')}" likely needs data-rt-type="context" for nested data access.`);
-                    console.warn(`  Hint: Add data-rt-type="context" to enable context drilling for child elements.`);
-                }
+
 
                 let arrayToRender = null;
                 if (Array.isArray(processedPayload)) {
@@ -247,6 +237,9 @@ export function attachRTBindings(clientProto: any) {
                 }
 
                 if (arrayToRender) {
+                    if (this.options?.debug) {
+                        console.log(`%c🐬 [Dolphin Render Debug]: Topic "${topic}" rendering ${arrayToRender.length} items to template "${el.getAttribute('data-rt-template')}"`, 'color: #a855f7; font-weight: bold;', arrayToRender);
+                    }
                     if (el.getAttribute('data-rt-virtual') === 'true') {
                         if (!(el as any)._virtualListenerWired) {
                             (el as any)._virtualListenerWired = true;

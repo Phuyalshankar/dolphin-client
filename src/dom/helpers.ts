@@ -76,24 +76,28 @@ export function splitFirstUnquotedColon(str: string): [string, string] | null {
 // ── Expression Evaluator ─────────────────────────────────────────────────────
 
 /** Safely evaluate a JS expression with a context object (uses Proxy + with) */
+export function getNestedValue(obj: any, path: string): any {
+    if (!obj || typeof obj !== 'object' || !path) return undefined;
+    if (Object.prototype.hasOwnProperty.call(obj, path)) return obj[path];
+    const parts = String(path).replace(/\?/g, '').split('.');
+    let current = obj;
+    for (let i = 0; i < parts.length; i++) {
+        if (current === undefined || current === null) return undefined;
+        current = current[parts[i]];
+    }
+    return current;
+}
+
 export function evaluateExpression(expr: string, ctx: any): any {
-    if (!ctx || typeof ctx !== 'object') return undefined;
+    if (!ctx || typeof ctx !== 'object' || !expr) return undefined;
+    const trimmed = String(expr).trim();
+    const directVal = getNestedValue(ctx, trimmed);
+    if (directVal !== undefined) return directVal;
     try {
-        const safeCtx = new Proxy(ctx, {
-            has(target, prop) { return true; },
-            get(target, prop) {
-                if (typeof prop === 'string') {
-                    if (prop in target) return target[prop];
-                    if (typeof globalThis !== 'undefined' && prop in globalThis) return (globalThis as any)[prop];
-                    if (typeof window !== 'undefined' && prop in window) return (window as any)[prop];
-                }
-                return undefined;
-            }
-        });
-        const fn = new Function('ctx', `with(ctx) { return (${expr}); }`);
-        return fn(safeCtx);
+        const fn = new Function('ctx', `try { with(ctx) { return (${trimmed}); } } catch(e) { return undefined; }`);
+        return fn(ctx);
     } catch {
-        return ctx[expr];
+        return directVal;
     }
 }
 
@@ -284,7 +288,7 @@ export function hydrateIcons(container: Element | Document = document) {
 
     spacers.forEach(async (span) => {
         const iconName = span.getAttribute('data-icon-name');
-        if (!iconName) return;
+        if (!iconName || iconName.startsWith('dolphin-')) return;
         const classes = (span.getAttribute('class') || '').replace('dolphin-icon-spacer', '').trim();
         const cacheKey = `dolphin-icon-${iconName}`;
 
