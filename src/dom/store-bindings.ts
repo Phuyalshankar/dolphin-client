@@ -256,7 +256,7 @@ export function attachStoreBindings(clientProto: any) {
             if (el._resetWired) return;
             el._resetWired = true;
             const targetStore = el.getAttribute('data-store-reset');
-            if (targetStore) {
+            if (targetStore && typeof el.addEventListener === 'function') {
                 el.addEventListener('click', () => {
                     this.resetStoreState(targetStore);
                 });
