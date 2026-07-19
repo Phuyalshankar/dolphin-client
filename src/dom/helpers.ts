@@ -244,7 +244,11 @@ export function scheduleDOMUpdate(element: Element, newHTML: string) {
         scheduleFn(() => {
             pendingUpdates.forEach((html, el) => {
                 if ((el as any).isConnected !== false) {
-                    patchDOM(el, html);
+                    if (typeof el.hasAttribute === 'function' && el.hasAttribute('data-rt-template')) {
+                        el.innerHTML = html;
+                    } else {
+                        patchDOM(el, html);
+                    }
                 }
             });
             pendingUpdates.clear();
@@ -262,6 +266,9 @@ export function resolveTemplate(el: Element): string | null {
     if (!template) return null;
     if (typeof document !== 'undefined' && !template.includes('<')) {
         try {
+            const parentScope = (el as any).closest ? (el as any).closest('main, [data-import], section, body') || el.parentNode : el.parentNode;
+            const scopedTemp = parentScope && typeof parentScope.querySelector === 'function' ? parentScope.querySelector(template) : null;
+            if (scopedTemp) return scopedTemp.innerHTML;
             const tempEl = document.querySelector(template);
             if (tempEl) return tempEl.innerHTML;
         } catch {}

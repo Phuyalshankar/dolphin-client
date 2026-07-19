@@ -147,7 +147,12 @@ export function renderTemplate(templateStr: string, context: any): string {
 
             const token = match[0];
             if (token.startsWith('{{')) {
-                const expr = match[2];
+                let expr = match[2];
+                if (expr) {
+                    while (/([a-zA-Z_$][a-zA-Z0-9_$]*)\.([a-zA-Z_$][a-zA-Z0-9_$]*)/.test(expr)) {
+                        expr = expr.replace(/([a-zA-Z_$][a-zA-Z0-9_$]*)\.([a-zA-Z_$][a-zA-Z0-9_$]*)/g, '$1?.$2');
+                    }
+                }
                 compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");\n`;
             } else if (token.startsWith('{#if')) {
                 compiled += `if (${match[3]}) {\n`;
