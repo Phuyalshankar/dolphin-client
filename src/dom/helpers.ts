@@ -257,7 +257,7 @@ export function scheduleDOMUpdate(element: Element, newHTML: string) {
             });
             pendingUpdates.clear();
             rafScheduled = false;
-            hydrateIcons();
+            try { hydrateIcons(); } catch {}
         });
     }
 }
@@ -281,9 +281,11 @@ export function resolveTemplate(el: Element): string | null {
 }
 
 /** Asynchronously hydrates any Lucide icon spacers in the DOM, with localStorage caching */
-export function hydrateIcons(container: Element | Document = document) {
+export function hydrateIcons(container?: Element | Document) {
     if (typeof document === 'undefined') return;
-    const spacers = container.querySelectorAll('.dolphin-icon-spacer');
+    const target = container || document;
+    if (!target || typeof target.querySelectorAll !== 'function') return;
+    const spacers = target.querySelectorAll('.dolphin-icon-spacer');
     if (spacers.length === 0) return;
 
     spacers.forEach(async (span) => {
