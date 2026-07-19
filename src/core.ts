@@ -84,7 +84,7 @@ export class DolphinClient {
         // always resolve from the site root, regardless of the current URL path or hash.
         if (typeof document !== 'undefined' && !document.querySelector('base')) {
             const base = document.createElement('base');
-            base.href = (typeof window !== 'undefined' ? window.location.origin : '') + '/';
+            base.href = (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '') + '/';
             if (document.head) {
                 document.head.insertBefore(base, document.head.firstChild);
             }
@@ -466,11 +466,17 @@ export class DolphinClient {
     }
 
     /**
-     * Publish a message to a topic. Queued if offline.
+     * Publish a message to a topic, render matching local bindings immediately,
+     * then send the message to the realtime server. The outbound message is
+     * queued if the socket is offline.
      * @param {string} topic
      * @param {any}    payload
      */
     publish(topic, payload) {
+        // Optimistic local render: supports object and array payloads, including
+        // declarative templates, filters, searches, and sorts.
+        (this as any)._updateDOM?.(topic, payload);
+
         this._sendRaw({ topic, payload });
     }
 

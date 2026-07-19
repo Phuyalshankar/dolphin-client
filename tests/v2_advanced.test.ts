@@ -53,9 +53,72 @@ class MockElement {
 
   set innerHTML(val: string) {
     this.childNodes = [];
-    const txt = new MockElement('#text', 3);
-    txt._textContent = val;
-    this.appendChild(txt);
+    const parseHTMLToMockElements = (html: string): MockElement[] => {
+      const results: MockElement[] = [];
+      const tagRegex = /<(\/?)([a-zA-Z0-9:-]+)([^>]*?)>/g;
+      let lastIndex = 0;
+      let match;
+      const stack: MockElement[] = [];
+
+      while ((match = tagRegex.exec(html)) !== null) {
+        const text = html.slice(lastIndex, match.index);
+        if (text && text.trim()) {
+          const txtNode = new MockElement('#text', 3);
+          txtNode._textContent = text;
+          if (stack.length > 0) {
+            stack[stack.length - 1].appendChild(txtNode);
+          } else {
+            results.push(txtNode);
+          }
+        }
+
+        const isClose = !!match[1];
+        const tagName = match[2];
+        const attrsStr = match[3];
+
+        if (isClose) {
+          stack.pop();
+        } else {
+          const el = new MockElement(tagName);
+          const attrRegex = /([a-zA-Z0-9:-]+)(?:=(?:"([^"]*)"|'([^']*)'|{([^}]*)}|([^>\s]+)))?/g;
+          let attrMatch;
+          while ((attrMatch = attrRegex.exec(attrsStr)) !== null) {
+            const attrName = attrMatch[1];
+            let attrVal = attrMatch[2] || attrMatch[3] || attrMatch[4] || attrMatch[5] || '';
+            if (attrMatch[4] !== undefined) {
+              attrVal = `{${attrMatch[4]}}`;
+            }
+            if (attrName !== '/' && attrName !== '<' && attrName !== '>') {
+              el.setAttribute(attrName, attrVal);
+            }
+          }
+
+          if (stack.length > 0) {
+            stack[stack.length - 1].appendChild(el);
+          } else {
+            results.push(el);
+          }
+
+          const isSelfClosing = attrsStr.trim().endsWith('/') || ['circle', 'line', 'polyline', 'polygon', 'path', 'img', 'input', 'br', 'hr', 'meta', 'link', 'base'].includes(tagName.toLowerCase());
+          if (!isSelfClosing) {
+            stack.push(el);
+          }
+        }
+        lastIndex = tagRegex.lastIndex;
+      }
+
+      const remainingText = html.slice(lastIndex);
+      if (remainingText && remainingText.trim()) {
+        const txtNode = new MockElement('#text', 3);
+        txtNode._textContent = remainingText;
+        results.push(txtNode);
+      }
+
+      return results;
+    };
+
+    const parsed = parseHTMLToMockElements(val);
+    parsed.forEach(c => this.appendChild(c));
   }
 
   get textContent() {
@@ -78,6 +141,29 @@ class MockElement {
     const attrs = this.attributes.map(a => `${a.name}="${a.value}"`).join(' ');
     const attrStr = attrs ? ' ' + attrs : '';
     return `<${this.tagName.toLowerCase()}${attrStr}>${this.innerHTML}</${this.tagName.toLowerCase()}>`;
+  }
+
+  set outerHTML(html: string) {
+    if (!this.parentNode) return;
+    const temp = new MockElement('div');
+    temp.innerHTML = html;
+    const parent = this.parentNode;
+    const idx = parent.childNodes.indexOf(this);
+    if (idx !== -1) {
+      parent.childNodes.splice(idx, 1, ...temp.childNodes);
+      temp.childNodes.forEach(c => { c.parentNode = parent; });
+    }
+  }
+
+  replaceChild(newChild: MockElement, oldChild: MockElement) {
+    const idx = this.childNodes.indexOf(oldChild);
+    if (idx !== -1) {
+      this.childNodes[idx] = newChild;
+      newChild.parentNode = this;
+      oldChild.parentNode = null;
+      return oldChild;
+    }
+    return null;
   }
 
   getAttribute(name: string) {
@@ -162,9 +248,24 @@ class MockElement {
     const results: MockElement[] = [];
     const traverse = (node: MockElement) => {
       node.childNodes.forEach(child => {
-        if (selector === '[data-i18n-key]' && child.hasAttribute('data-i18n-key')) results.push(child);
-        else if (selector === '[data-i18n-dict]' && child.hasAttribute('data-i18n-dict')) results.push(child);
-        traverse(child);
+        if (child.nodeType === 1) {
+          let matches = false;
+          if (selector.startsWith('.')) {
+            const className = selector.slice(1);
+            const classAttr = child.getAttribute('class') || '';
+            matches = classAttr.split(/\s+/).includes(className);
+          } else if (selector.startsWith('[') && selector.endsWith(']')) {
+            const attr = selector.slice(1, -1);
+            matches = child.hasAttribute(attr);
+          } else if (selector.includes(',')) {
+            matches = selector.split(',').some(sel => {
+              const cleaned = sel.trim().slice(1, -1);
+              return child.hasAttribute(cleaned);
+            });
+          }
+          if (matches) results.push(child);
+          traverse(child);
+        }
       });
     };
     traverse(this);
@@ -725,5 +826,269 @@ describe('v2.0 Advanced Integrated Capabilities', () => {
     // Check if the template rendered inside the wrapper
     expect(wrapper.innerHTML).toContain('Count: 5');
   });
-});
 
+  test('Declarative Virtual Scroll rendering slices items correctly', () => {
+    const parentEl = new MockElement('div') as any;
+    parentEl.addEventListener = jest.fn();
+    parentEl.setAttribute('data-rt-bind', 'store/products');
+    parentEl.setAttribute('data-rt-virtual', 'true');
+    parentEl.setAttribute('data-rt-item-height', '100');
+    parentEl.setAttribute('data-rt-buffer', '2');
+    
+    const templateEl = new MockElement('template') as any;
+    templateEl.innerHTML = '<div class="product-item">{{name}}</div>';
+    
+    parentEl.setAttribute('data-rt-template', '#product-template');
+
+    const origQuerySelectorAll = (global as any).document.querySelectorAll;
+    const origQuerySelector = (global as any).document.querySelector;
+    const origGetComputedStyle = (global as any).window ? (global as any).window.getComputedStyle : undefined;
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === '[data-rt-bind="store/products"]') return [parentEl];
+      return [];
+    });
+
+    (global as any).document.querySelector = jest.fn().mockImplementation((sel) => {
+      if (sel === '#product-template') return templateEl;
+      return null;
+    });
+
+    (global as any).window = (global as any).window || {};
+    (global as any).window.getComputedStyle = jest.fn().mockReturnValue({
+      overflowY: 'visible',
+      overflow: 'visible',
+      position: 'static'
+    });
+
+    // Reuse existing c client
+    const mockItems = Array.from({ length: 100 }, (_, i) => ({ name: `Product ${i}` }));
+    c.setStoreState('products', 'items', mockItems);
+    
+    // Trigger render
+    c._updateDOM('store/products', { items: mockItems });
+    
+    expect(parentEl.innerHTML).toContain('Product 0');
+    expect(parentEl.innerHTML).toContain('Product 9');
+    expect(parentEl.innerHTML).not.toContain('Product 10');
+    
+    expect(parentEl.innerHTML).toContain('class="rt-virtual-spacer-top"');
+    expect(parentEl.innerHTML).toContain('class="rt-virtual-spacer-bottom"');
+
+    // Restore globals
+    (global as any).document.querySelectorAll = origQuerySelectorAll;
+    (global as any).document.querySelector = origQuerySelector;
+    delete (global as any).window;
+  });
+
+  test('React JSX style attributes and syntax are compiled without errors', () => {
+    const parentEl = new MockElement('div') as any;
+    parentEl.setAttribute('data-rt-bind', 'store/app');
+    
+    const templateEl = new MockElement('template') as any;
+    templateEl.innerHTML = `
+      <div className="react-card" onClick="alert(1)" key={id}>
+        {name}
+        <Search className="w-4 h-4" />
+        {showDetail ? <span>Detail Text</span> : <span>Summary Text</span>}
+        {isAdmin && <button>Delete Admin</button>}
+      </div>
+    `;
+    
+    parentEl.setAttribute('data-rt-template', '#react-template');
+
+    const origQuerySelectorAll = (global as any).document.querySelectorAll;
+    const origQuerySelector = (global as any).document.querySelector;
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === '[data-rt-bind="store/app"]') return [parentEl];
+      if (sel === 'dolphin-icon-spacer') return parentEl.querySelectorAll('dolphin-icon-spacer');
+      return [];
+    });
+
+    (global as any).document.querySelector = jest.fn().mockImplementation((sel) => {
+      if (sel === '#react-template') return templateEl;
+      return null;
+    });
+
+    const mockStorage: Record<string, string> = {};
+    (global as any).localStorage = {
+      getItem: (key: string) => mockStorage[key] || null,
+      setItem: (key: string, val: string) => { mockStorage[key] = val; }
+    };
+    (global as any).localStorage.setItem(
+      'dolphin-icon-search',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>'
+    );
+
+    const context = { id: 42, name: 'React Test', showDetail: true, isAdmin: true };
+    c.setStoreState('app', 'id', 42);
+    c.setStoreState('app', 'name', 'React Test');
+    c.setStoreState('app', 'showDetail', true);
+    c.setStoreState('app', 'isAdmin', true);
+    c._updateDOM('store/app', context);
+
+    // Synchronous checks — these happen immediately after _updateDOM
+    expect(parentEl.innerHTML).toContain('class="react-card"');
+    expect(parentEl.innerHTML).toContain('onclick="alert(1)"');
+    expect(parentEl.innerHTML).toContain('data-key="42"');
+    expect(parentEl.innerHTML).toContain('React Test');
+
+    // Spacer tag should be present before hydration fires
+    expect(parentEl.innerHTML).toContain('data-icon-name="search"');
+    expect(parentEl.innerHTML).toContain('dolphin-icon-spacer');
+    expect(parentEl.innerHTML).toContain('w-4 h-4');
+
+    // Directly call hydrateIcons on the parentEl to test hydration synchronously,
+    // bypassing the async RAF scheduler
+    const { hydrateIcons } = require('../src/dom/index');
+    hydrateIcons(parentEl);
+
+    // After hydration: spacer should be replaced with cached SVG
+    // Note: injectClasses puts class before xmlns, so check attributes independently
+    expect(parentEl.innerHTML).toContain('<svg');
+    expect(parentEl.innerHTML).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(parentEl.innerHTML).toContain('w-4 h-4');
+    expect(parentEl.innerHTML).toContain('<circle cx="11" cy="11" r="8"');
+
+    // Check JSX logic compilation
+    expect(parentEl.innerHTML).toContain('Detail Text');
+    expect(parentEl.innerHTML).not.toContain('Summary Text');
+    expect(parentEl.innerHTML).toContain('Delete Admin');
+
+    (global as any).document.querySelectorAll = origQuerySelectorAll;
+    (global as any).document.querySelector = origQuerySelector;
+    delete (global as any).localStorage;
+  });
+
+  test('dolphin-store with children acts as context container (dual-mode)', () => {
+    const childEl = new MockElement('SPAN') as any;
+    childEl.setAttribute('data-rt-text', 'username');
+
+    const storeEl = new MockElement('dolphin-store') as any;
+    storeEl.setAttribute('name', 'profile');
+    storeEl.setAttribute('username', 'Shankar');
+
+    // Has child elements — dual-mode (context container + store seeder)
+    storeEl.appendChild(childEl);
+
+    storeEl.querySelectorAll = jest.fn().mockReturnValue([childEl]);
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === 'dolphin-store') return [storeEl];
+      if (sel === '[data-rt-bind="store/profile"]') return [storeEl];
+      return [];
+    });
+
+    c.uiStores = new Map();
+    c._scanStoreBinds();
+
+    // Store should be seeded
+    expect(c.getStoreState('profile', 'username')).toBe('Shankar');
+    // Element should NOT be hidden (it has children to display)
+    expect(storeEl.style.display).not.toBe('none');
+    // Element should have data-rt-bind and data-rt-type set automatically
+    expect(storeEl.getAttribute('data-rt-bind')).toBe('store/profile');
+    expect(storeEl.getAttribute('data-rt-type')).toBe('context');
+    // Child should have text updated
+    expect(childEl.textContent).toBe('Shankar');
+  });
+
+  test('dolphin-store auto-wires template wrapper element and renders it', () => {
+    const storeEl = new MockElement('dolphin-store') as any;
+    storeEl.setAttribute('name', 'app');
+    storeEl.setAttribute('template', '#counter-ui');
+    storeEl.setAttribute('count', '5');
+    storeEl.childNodes = [];
+
+    const parentEl = new MockElement('DIV') as any;
+    parentEl.appendChild(storeEl);
+
+    const templateEl = new MockElement('template') as any;
+    templateEl.innerHTML = 'Count: {{count}}';
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === 'dolphin-store') return [storeEl];
+      if (sel === '[data-rt-bind="store/app"]') return parentEl.childNodes.filter((c: any) => c.getAttribute && c.getAttribute('data-rt-bind') === 'store/app');
+      return [];
+    });
+
+    (global as any).document.querySelector = jest.fn().mockImplementation((sel) => {
+      if (sel === '#counter-ui') return templateEl;
+      if (sel.startsWith('[data-ds-wired=')) return null;
+      return null;
+    });
+
+    c.uiStores = new Map();
+    c._scanStoreBinds();
+
+    // Store should be seeded
+    expect(c.getStoreState('app', 'count')).toBe(5);
+
+    // It should have injected a wrapper element
+    const siblings = parentEl.childNodes;
+    expect(siblings.length).toBe(2);
+    const wrapper = siblings[1];
+    expect(wrapper.tagName).toBe('DIV');
+    expect(wrapper.getAttribute('data-rt-bind')).toBe('store/app');
+    expect(wrapper.getAttribute('template')).toBeNull(); // Should be data-rt-template, not template
+    expect(wrapper.getAttribute('data-rt-template')).toBe('#counter-ui');
+    
+    // Check if the template rendered inside the wrapper
+    expect(wrapper.innerHTML).toContain('Count: 5');
+  });
+
+  test('Declarative Virtual Scroll rendering slices items correctly', () => {
+    const parentEl = new MockElement('div') as any;
+    parentEl.addEventListener = jest.fn();
+    parentEl.setAttribute('data-rt-bind', 'store/products');
+    parentEl.setAttribute('data-rt-virtual', 'true');
+    parentEl.setAttribute('data-rt-item-height', '100');
+    parentEl.setAttribute('data-rt-buffer', '2');
+    
+    const templateEl = new MockElement('template') as any;
+    templateEl.innerHTML = '<div class="product-item">{{name}}</div>';
+    
+    parentEl.setAttribute('data-rt-template', '#product-template');
+
+    const origQuerySelectorAll = (global as any).document.querySelectorAll;
+    const origQuerySelector = (global as any).document.querySelector;
+    const origGetComputedStyle = (global as any).window ? (global as any).window.getComputedStyle : undefined;
+
+    (global as any).document.querySelectorAll = jest.fn().mockImplementation((sel) => {
+      if (sel === '[data-rt-bind="store/products"]') return [parentEl];
+      return [];
+    });
+
+    (global as any).document.querySelector = jest.fn().mockImplementation((sel) => {
+      if (sel === '#product-template') return templateEl;
+      return null;
+    });
+
+    (global as any).window = (global as any).window || {};
+    (global as any).window.getComputedStyle = jest.fn().mockReturnValue({
+      overflowY: 'visible',
+      overflow: 'visible',
+      position: 'static'
+    });
+
+    // Reuse existing c client
+    const mockItems = Array.from({ length: 100 }, (_, i) => ({ name: `Product ${i}` }));
+    c.setStoreState('products', 'items', mockItems);
+    
+    // Trigger render
+    c._updateDOM('store/products', { items: mockItems });
+    
+    expect(parentEl.innerHTML).toContain('Product 0');
+    expect(parentEl.innerHTML).toContain('Product 9');
+    expect(parentEl.innerHTML).not.toContain('Product 10');
+    
+    expect(parentEl.innerHTML).toContain('class="rt-virtual-spacer-top"');
+    expect(parentEl.innerHTML).toContain('class="rt-virtual-spacer-bottom"');
+
+    // Restore globals
+    (global as any).document.querySelectorAll = origQuerySelectorAll;
+    (global as any).document.querySelector = origQuerySelector;
+    delete (global as any).window;
+  });
+});

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Form with Icons - Dolphin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .bg-danphe {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    
+    .glow {
+      box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+    }
+    
+    /* Floating Label Styles */
+    .floatinglabel {
+      position: relative;
+    }
+    
+    .floatinglabel-input {
+      padding: 1rem;
+      font-size: 1rem;
+    }
+    
+    .floatinglabel-input.lg {
+      padding: 1.25rem;
+    }
+    
+    .floatinglabel-label {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      transition: all 0.3s ease;
+      pointer-events: none;
+      font-size: 1rem;
+    }
+    
+    .floatinglabel-input:focus ~ .floatinglabel-label,
+    .floatinglabel-input:not(:placeholder-shown) ~ .floatinglabel-label {
+      top: -0.5rem;
+      font-size: 0.75rem;
+      background: rgba(102, 126, 234, 0.9);
+      padding: 0.125rem 0.5rem;
+      border-radius: 0.25rem;
+      color: white;
+    }
+    
+    /* Input with left icon spacing */
+    .input-icon-left input {
+      padding-left: 3.5rem;
+    }
+    
+    /* Input with both icons spacing */
+    .input-icon-both input {
+      padding-left: 3.5rem;
+      padding-right: 3.5rem;
+    }
+    
+    /* Icon positioning */
+    .input-icon-container {
+      position: relative;
+      width: 100%;
+    }
+    
+    .icon-left {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .icon-right {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      z-index: 10;
+    }
+    
+    /* Custom styles */
+    .flex-center {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .flex-col-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .flex-left {
+      display: flex;
+      align-items: center;
+    }
+  </style>
+</head>
+<body class="p-0 w-full h-screen flex-center bg-danphe">
+  
+  <div class="glass card p-6 lg:p-8 border border-white/20 rounded-2xl w-full max-w-md mx-4">
+    <h3 class="text-xl font-bold text-white mb-1">Welcome Back 👋</h3>
+    <p class="text-white/50 text-sm mb-6">Sign in to your account</p>
+    
+    <form class="flex-col-left w-full gap-5">
+      
+      <!-- Email Input with Icon -->
+      <div class="w-full">
+        <div class="input-icon-container">
+          <!-- Left Icon -->
+          <span class="icon-left dolphin-icon-spacer w-5 h-5 text-white/60" 
+                data-icon-name="mail"></span>
+          
+          <!-- Floating Label Input -->
+          <div class="floatinglabel w-full">
+            <input 
+              type="email" 
+              id="login-email" 
+              class="floatinglabel-input lg w-full bg-white/10 border border-white/20 focus:border-blue-400 transition-colors rounded-xl text-white placeholder:text-transparent"
+              style="padding-left: 3.5rem;"
+              placeholder=" "
+              required
+            />
+            <label 
+              for="login-email" 
+              class="floatinglabel-label text-white/70 font-medium">
+              Email Address
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Password Input with Icons (Left & Right) -->
+      <div class="w-full">
+        <div class="input-icon-container">
+          <!-- Left Icon -->
+          <span class="icon-left dolphin-icon-spacer w-5 h-5 text-white/60" 
+                data-icon-name="lock"></span>
+          
+          <!-- Right Icon (Toggle Password) -->
+          <span class="icon-right dolphin-icon-spacer w-5 h-5 text-white/60 hover:text-white transition-colors" 
+                data-icon-name="eye"
+                onclick="togglePassword()"
+                id="password-toggle-icon"></span>
+          
+          <!-- Floating Label Input -->
+          <div class="floatinglabel w-full">
+            <input 
+              type="password" 
+              id="login-password" 
+              class="floatinglabel-input lg w-full bg-white/10 border border-white/20 focus:border-blue-400 transition-colors rounded-xl text-white placeholder:text-transparent"
+              style="padding-left: 3.5rem; padding-right: 3.5rem;"
+              placeholder=" "
+              required
+            />
+            <label 
+              for="login-password" 
+              class="floatinglabel-label text-white/70 font-medium">
+              Password
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Remember Me & Forgot Password -->
+      <div class="flex-between w-full">
+        <label class="flex-left gap-2 cursor-pointer">
+          <input 
+            type="checkbox" 
+            id="remember-me" 
+            class="accent-blue-500 w-4 h-4 rounded border-white/30 bg-white/10"
+          />
+          <span class="text-sm font-medium text-white/80">Remember me</span>
+        </label>
+        <a href="#" class="text-sm text-blue-300 hover:text-blue-200 transition-colors font-medium">
+          Forgot password?
+        </a>
+      </div>
+
+      <!-- Sign In Button -->
+      <button 
+        type="submit" 
+        class="w-full py-3 rounded-xl text-white font-bold bg-blue-600 hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 glow">
+        <span class="flex items-center justify-center gap-2">
+          <span class="dolphin-icon-spacer w-5 h-5" data-icon-name="log-in"></span>
+          Sign In
+        </span>
+      </button>
+
+      <!-- Sign Up Link -->
+      <p class="text-center text-white/50 text-sm w-full">
+        Don't have an account? 
+        <a href="#" class="text-blue-300 hover:text-blue-200 font-semibold transition-colors">
+          Sign up
+        </a>
+      </p>
+      
+    </form>
+  </div>
+
+  <!-- Dolphin Client -->
+  <script src="./dolphin-client.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      window.dolphin = new DolphinModule.DolphinClient();
+      window.dolphin.connect().catch(() => console.log('Offline mode'));
+      
+      // Manual icon hydration
+      setTimeout(() => {
+        console.log('🎨 Hydrating icons...');
+        manualHydrateIcons();
+      }, 500);
+    });
+    
+    // Manual hydration function
+    function manualHydrateIcons() {
+      const spacers = document.querySelectorAll('.dolphin-icon-spacer');
+      console.log(`Found ${spacers.length} icon placeholders`);
+      
+      spacers.forEach(async (span) => {
+        const iconName = span.getAttribute('data-icon-name');
+        if (!iconName) return;
+        
+        const classes = (span.getAttribute('class') || '').replace('dolphin-icon-spacer', '').trim();
+        const cacheKey = `dolphin-icon-${iconName}`;
+        
+        const injectClasses = (svgStr) => {
+          if (classes) {
+            if (svgStr.includes('class=')) {
+              return svgStr.replace(/class="([^"]*)"/, `class="$1 ${classes}"`);
+            }
+            return svgStr.replace('<svg', `<svg class="${classes}"`);
+          }
+          return svgStr;
+        };
+        
+        // Try localStorage cache first
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            span.outerHTML = injectClasses(cached);
+            console.log(`✅ ${iconName} from cache`);
+            return;
+          }
+        } catch (e) {}
+        
+        // Fetch from CDN
+        try {
+          console.log(`📥 Fetching ${iconName}...`);
+          const res = await fetch(`https://unpkg.com/lucide-static/icons/${iconName}.svg`);
+          if (res.ok) {
+            const rawSVG = await res.text();
+            try {
+              localStorage.setItem(cacheKey, rawSVG);
+            } catch (e) {}
+            span.outerHTML = injectClasses(rawSVG);
+            console.log(`✅ ${iconName} loaded`);
+          } else {
+            console.error(`❌ Failed: ${iconName} (${res.status})`);
+          }
+        } catch (err) {
+          console.error(`❌ Error: ${iconName}`, err);
+        }
+      });
+    }
+    // Toggle password visibility
+    function togglePassword() {
+      const passwordInput = document.getElementById('login-password');
+      const toggleIcon = document.getElementById('password-toggle-icon');
+      
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.setAttribute('data-icon-name', 'eye-off');
+        toggleIcon.outerHTML = '<span id="password-toggle-icon" class="icon-right dolphin-icon-spacer w-5 h-5 text-white/60 hover:text-white transition-colors" data-icon-name="eye-off" onclick="togglePassword()"></span>';
+        
+        // Re-hydrate the new icon
+        setTimeout(() => {
+          manualHydrateIcons();
+        }, 10);
+      } else {
+        passwordInput.type = 'password';
+        toggleIcon.setAttribute('data-icon-name', 'eye');
+        toggleIcon.outerHTML = '<span id="password-toggle-icon" class="icon-right dolphin-icon-spacer w-5 h-5 text-white/60 hover:text-white transition-colors" data-icon-name="eye" onclick="togglePassword()"></span>';
+        
+        // Re-hydrate the new icon
+        setTimeout(() => {
+          manualHydrateIcons();
+        }, 10);
+      }
+    }
+  </script>
+</body>
+</html>

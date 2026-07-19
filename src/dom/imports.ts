@@ -1,6 +1,7 @@
 /** dom/imports.ts — HTML Component Import engine (data-import). Supports nested imports, concurrent caching, circular dependency detection. */
 
 import { sanitizeHTML, executeScripts } from './helpers';
+import { preprocessJSX } from './template';
 
 export function attachImports(clientProto: any, componentPromiseCache: Map<string, Promise<string>>) {
     clientProto._resolveImports = async function(container?: Element) {
@@ -26,12 +27,7 @@ export function attachImports(clientProto: any, componentPromiseCache: Map<strin
             const rawUrl = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
             const selector = hashIndex !== -1 ? src.substring(hashIndex) : null;
 
-            // @fix: Resolve component URLs relative to document.baseURI (respects <base href="/">)
-            // so that ./components/login.html always fetches /components/login.html regardless
-            // of the current hash route or URL path (was: resolved relative to current URL, broke on CDN).
-            const baseURI = (typeof document !== 'undefined' && document.baseURI)
-                ? document.baseURI
-                : (typeof window !== 'undefined' ? window.location.origin + '/' : '/');
+            const baseURI = typeof window !== 'undefined' ? window.location.href : '/';
             const url = rawUrl
                 ? new URL(rawUrl, baseURI).href
                 : baseURI;
@@ -68,7 +64,7 @@ export function attachImports(clientProto: any, componentPromiseCache: Map<strin
 
             // Component HTML is template/source file (no XSS risk like user payloads),
             // assign directly and run script tags
-            el.innerHTML = content;
+            el.innerHTML = preprocessJSX(content);
             executeScripts(el);
             el.removeAttribute('data-import');
 
@@ -80,9 +76,16 @@ export function attachImports(clientProto: any, componentPromiseCache: Map<strin
 
             this._scanStoreBinds();
             this._scanAndFetchAPIBinds();
+            this._scanAndLoadModuleBinds();
         };
 
         const promises = Array.from(elements).map(el => resolveNode(el, new Set<string>()));
         await Promise.all(promises);
+
+        if (this.uiStores) {
+            this.uiStores.forEach((store: any, storeName: string) => {
+                this._updateDOM(`store/${storeName}`, store);
+            });
+        }
     };
 }

@@ -30,57 +30,100 @@ if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') 
 
 export function attachStoreBindings(clientProto: any) {
 
-    clientProto.setStoreState = function(storeName: string, key: string, val: any, originEl?: Element) {
-        this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
-        if (!this.uiStores.has(storeName)) {
-            this.uiStores.set(storeName, {});
-        }
-        const store = this.uiStores.get(storeName);
-        store[key] = val;
+    clientProto.setStoreState = function(storeName: string, keyOrVal: any, val?: any, originEl?: Element) {
+        this.uiStores = this.uiStores || new Map<string, any>();
+        if (typeof keyOrVal === 'string') {
+            if (!this.uiStores.has(storeName) || typeof this.uiStores.get(storeName) !== 'object' || Array.isArray(this.uiStores.get(storeName))) {
+                this.uiStores.set(storeName, {});
+            }
+            const store = this.uiStores.get(storeName);
+            store[keyOrVal] = val;
 
-        if (this.options.debug) {
-            console.log(`%c💾 [Dolphin Store Update]:`, 'color: #ec4899; font-weight: bold;', `${storeName}.${key}`, '=', val);
-        }
-
-        if (typeof document !== 'undefined') {
-            // @fix: Cached element list — avoids querySelectorAll on every call
-            const cacheKey = `${storeName}.${key}`;
-            let readElements: Element[];
-            if (_storeReadCache.has(cacheKey)) {
-                readElements = _storeReadCache.get(cacheKey)!;
-            } else {
-                readElements = Array.from(document.querySelectorAll(`[data-store-read="${cacheKey}"]`));
-                _storeReadCache.set(cacheKey, readElements);
+            if (this.options.debug) {
+                console.log(`%c💾 [Dolphin Store Update]:`, 'color: #ec4899; font-weight: bold;', `${storeName}.${keyOrVal}`, '=', val);
             }
 
-            readElements.forEach((el: any) => {
-                if (el === originEl) return;
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                    if (el.type === 'checkbox') {
-                        el.checked = !!val;
-                    } else {
-                        el.value = val !== undefined && val !== null ? val : '';
-                    }
+            if (typeof document !== 'undefined') {
+                const cacheKey = `${storeName}.${keyOrVal}`;
+                let readElements: Element[];
+                if (_storeReadCache.has(cacheKey)) {
+                    readElements = _storeReadCache.get(cacheKey)!;
                 } else {
-                    el.textContent = val !== undefined && val !== null ? val : '';
+                    readElements = Array.from(document.querySelectorAll(`[data-store-read="${cacheKey}"]`));
+                    _storeReadCache.set(cacheKey, readElements);
                 }
-            });
-        }
 
-        this.publish(`store/${storeName}`, store);
-        if (typeof this._updateDOM === 'function') {
-            this._updateDOM(`store/${storeName}`, store);
+                readElements.forEach((el: any) => {
+                    if (el === originEl) return;
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        if (el.type === 'checkbox') {
+                            el.checked = !!val;
+                        } else {
+                            el.value = val !== undefined && val !== null ? val : '';
+                        }
+                    } else {
+                        el.textContent = val !== undefined && val !== null ? val : '';
+                    }
+                });
+            }
+
+            this.publish(`store/${storeName}`, store);
+            if (typeof this._updateDOM === 'function') {
+                this._updateDOM(`store/${storeName}`, store);
+            }
+
+            // LocalStorage Auto-Persistence check
+            if (typeof document !== 'undefined') {
+                const storeEl = document.querySelector(`dolphin-store[name="${storeName}"], dolphin-store[data-store="${storeName}"]`);
+                if (storeEl && storeEl.getAttribute('data-persist') === 'true') {
+                    try { localStorage.setItem(`dolphin_store_${storeName}`, JSON.stringify(store)); } catch {}
+                }
+            }
+        } else {
+            // Direct Object or Array store (identical to DB API store data)
+            this.uiStores.set(storeName, keyOrVal);
+            if (this.options.debug) {
+                console.log(`%c💾 [Dolphin Direct Store Update]:`, 'color: #ec4899; font-weight: bold;', `${storeName}`, '=', keyOrVal);
+            }
+            this.publish(`store/${storeName}`, keyOrVal);
+            if (typeof this._updateDOM === 'function') {
+                this._updateDOM(`store/${storeName}`, keyOrVal);
+            }
+
+            // LocalStorage Auto-Persistence check
+            if (typeof document !== 'undefined') {
+                const storeEl = document.querySelector(`dolphin-store[name="${storeName}"], dolphin-store[data-store="${storeName}"]`);
+                if (storeEl && storeEl.getAttribute('data-persist') === 'true') {
+                    try { localStorage.setItem(`dolphin_store_${storeName}`, JSON.stringify(keyOrVal)); } catch {}
+                }
+            }
         }
     };
 
-    clientProto.getStoreState = function(storeName: string, key: string) {
-        this.uiStores = this.uiStores || new Map<string, Record<string, any>>();
+    clientProto.getStoreState = function(storeName: string, key?: string) {
+        this.uiStores = this.uiStores || new Map<string, any>();
         const store = this.uiStores.get(storeName);
-        return store ? store[key] : undefined;
+        if (!key) return store;
+        return (store && typeof store === 'object') ? store[key] : undefined;
+    };
+
+    clientProto.resetStoreState = function(storeName: string) {
+        this._initialStores = this._initialStores || new Map<string, any>();
+        if (this._initialStores.has(storeName)) {
+            const initialVal = JSON.parse(JSON.stringify(this._initialStores.get(storeName)));
+            this.setStoreState(storeName, initialVal);
+            if (this.options.debug) {
+                console.log(`%c🔄 [Dolphin Store Reset]:`, 'color: #3b82f6; font-weight: bold;', `${storeName}`, 'reverted to initial value');
+            }
+        } else {
+            console.warn(`[Dolphin Store Warning] No initial state captured for store "${storeName}".`);
+        }
     };
 
     clientProto._scanStoreBinds = function() {
         if (typeof document === 'undefined') return;
+
+        this._initialStores = this._initialStores || new Map<string, any>();
 
         // 1. Declarative Store Initialization via <dolphin-store>
         const storeElements = document.querySelectorAll('dolphin-store');
@@ -100,32 +143,45 @@ export function attachStoreBindings(clientProto: any) {
                 if (el.style) el.style.display = 'none';
             }
 
-            // Option A: Parse JSON text content
+            let initialCaptured = false;
+
+            // Option 0: Auto-hydrate from LocalStorage if data-persist="true"
+            const shouldPersist = el.getAttribute('data-persist') === 'true';
+            if (shouldPersist) {
+                try {
+                    const saved = localStorage.getItem(`dolphin_store_${storeName}`);
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (!this._initialStores.has(storeName)) {
+                            this._initialStores.set(storeName, JSON.parse(JSON.stringify(parsed)));
+                        }
+                        this.setStoreState(storeName, parsed);
+                        return;
+                    }
+                } catch {}
+            }
+
+            // Option A: Parse JSON text content (Objects & Array of Objects)
             if (!hasChildren) {
                 const content = el.textContent ? el.textContent.trim() : '';
-                if (content && content.startsWith('{')) {
+                if (content && (content.startsWith('{') || content.startsWith('['))) {
                     try {
                         const parsed = JSON.parse(content);
-                        if (parsed && typeof parsed === 'object') {
-                            Object.keys(parsed).forEach(key => {
-                                this.setStoreState(storeName, key, parsed[key]);
-                            });
-                        } else {
-                            console.error(`[Dolphin Store Init Error] JSON inside <dolphin-store name="${storeName}"> must be an object. Got: ${typeof parsed}`);
+                        if (!this._initialStores.has(storeName)) {
+                            this._initialStores.set(storeName, JSON.parse(JSON.stringify(parsed)));
+                            initialCaptured = true;
                         }
+                        this.setStoreState(storeName, parsed);
                     } catch (err: any) {
                         console.error(`[Dolphin Store Init Error] Failed to parse JSON inside <dolphin-store name="${storeName}">`);
-                        console.error(`  Content: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
-                        console.error(`  Error: ${err.message}`);
-                        console.error(`  Hint: Make sure JSON is wrapped in curly braces { } and has valid syntax`);
                     }
                 }
             }
 
-            // Option B: Parse key-value attributes
+            // Option B: Parse key-value attributes (Initial Values e.g. count="0" view="home")
             const templateSelector = el.getAttribute('template');
             if (el.attributes) {
-                const excludeAttrs = ['name', 'data-store', 'style', 'data-rt-bind', 'data-rt-type', 'template'];
+                const excludeAttrs = ['name', 'data-store', 'style', 'data-rt-bind', 'data-rt-type', 'template', 'data-persist', 'data-api-get', 'data-api-poll'];
                 Array.from(el.attributes).forEach((attr: any) => {
                     if (!excludeAttrs.includes(attr.name)) {
                         let val: any = attr.value;
@@ -136,7 +192,12 @@ export function attachStoreBindings(clientProto: any) {
                         this.setStoreState(storeName, attr.name, val);
                     }
                 });
+                if (!initialCaptured && !this._initialStores.has(storeName) && this.uiStores.get(storeName)) {
+                    this._initialStores.set(storeName, JSON.parse(JSON.stringify(this.uiStores.get(storeName))));
+                }
             }
+
+
 
             // Auto-wire template selector
             if (templateSelector && !hasChildren && el.parentNode && typeof document !== 'undefined') {
@@ -160,6 +221,19 @@ export function attachStoreBindings(clientProto: any) {
                 this.uiStores = this.uiStores || new Map();
                 const currentStore = this.uiStores.get(storeName) || {};
                 this._updateDOM(`store/${storeName}`, currentStore);
+            }
+        });
+
+        // 2. Wire up data-store-reset buttons
+        const resetEls = document.querySelectorAll('[data-store-reset]');
+        resetEls.forEach((el: any) => {
+            if (el._resetWired) return;
+            el._resetWired = true;
+            const targetStore = el.getAttribute('data-store-reset');
+            if (targetStore) {
+                el.addEventListener('click', () => {
+                    this.resetStoreState(targetStore);
+                });
             }
         });
 
@@ -240,6 +314,41 @@ export function attachStoreBindings(clientProto: any) {
             has: (_target, _prop) => true,
             set: (_target, prop, val) => {
                 if (typeof prop === 'string') {
+                    // Handle nested path assignment (e.g., nested.level1.level2.value = '...')
+                    if (prop.includes('.')) {
+                        const parts = prop.split('.');
+                        const rootProp = parts[0];
+                        const nestedPath = parts.slice(1).join('.');
+                        
+                        if (closestStoreName) {
+                            const store = this.uiStores.get(closestStoreName);
+                            if (store && rootProp in store) {
+                                // Navigate to the nested location and set value
+                                let current = store[rootProp];
+                                for (let i = 0; i < parts.length - 1; i++) {
+                                    const part = parts[i];
+                                    if (current === undefined || current === null) {
+                                        // Create missing intermediate objects
+                                        current = {};
+                                        if (i === 0) {
+                                            store[rootProp] = current;
+                                        } else {
+                                            // This is a simplification - full nested path creation would be more complex
+                                            console.warn('[Dolphin Store Action] Cannot create nested path:', prop);
+                                            return false;
+                                        }
+                                    }
+                                    current = current[part];
+                                }
+                                // Set the final value
+                                const lastPart = parts[parts.length - 1];
+                                current[lastPart] = val;
+                                this.publish(`store/${closestStoreName}`, store);
+                                return true;
+                            }
+                        }
+                    }
+                    
                     if (closestStoreName && parentCtx && prop in parentCtx) {
                         this.setStoreState(closestStoreName, prop, val);
                         return true;

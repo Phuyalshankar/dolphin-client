@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Products Render Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+  
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold mb-8 text-center">Products Test 🐬</h1>
+    
+    <!-- Step 1: Initialize Store with Items Array -->
+    <dolphin-store name="products">
+      {
+        "items": [
+          { "id": 1, "title": "Product 1", "price": 100, "image": "https://picsum.photos/200?random=1" },
+          { "id": 2, "title": "Product 2", "price": 200, "image": "https://picsum.photos/200?random=2" },
+          { "id": 3, "title": "Product 3", "price": 300, "image": "https://picsum.photos/200?random=3" }
+        ]
+      }
+    </dolphin-store>
+    
+    <!-- Step 2: Bind to Store and Reference Template -->
+    <div 
+      data-rt-bind="store/products" 
+      data-rt-template="#product-card"
+      class="grid grid-cols-3 gap-6">
+      <!-- यो placeholder data आएपछि हट्छ -->
+      <p class="col-span-3 text-center text-gray-500">Loading...</p>
+    </div>
+    
+    <!-- Step 3: Define Template -->
+    <template id="product-card">
+      {#each items as product}
+        <div class="bg-white p-4 rounded-lg shadow-md">
+          <img src="{{product.image}}" alt="{{product.title}}" class="w-full h-40 object-cover rounded mb-4">
+          <h3 class="font-bold text-lg mb-2">{{product.title}}</h3>
+          <p class="text-xl font-bold text-blue-600">${{product.price}}</p>
+        </div>
+      {/each}
+    </template>
+    
+    <!-- Debug Button -->
+    <div class="mt-8 p-4 bg-yellow-50 border-l-4 border-yellow-500">
+      <p class="font-bold mb-2">Debug Info (Check Console):</p>
+      <button 
+        onclick="debugProducts()" 
+        class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded">
+        Run Debug
+      </button>
+    </div>
+  </div>
+
+  <!-- Dolphin Client -->
+  <script src="./dolphin-client.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🐬 Initializing Dolphin...');
+      
+      window.dolphin = new DolphinModule.DolphinClient();
+      
+      window.dolphin.connect().catch(err => {
+        console.log('✅ Offline mode active');
+      });
+      
+      // Auto debug after 1 second
+      setTimeout(() => {
+        debugProducts();
+      }, 1000);
+    });
+    
+    function debugProducts() {
+      console.log('═══════════════════════════════════');
+      console.log('🔍 PRODUCTS DEBUG REPORT:');
+      console.log('═══════════════════════════════════');
+      
+      // 1. Check Dolphin
+      if (!window.dolphin) {
+        console.error('❌ window.dolphin not found!');
+        return;
+      }
+      console.log('✅ Dolphin initialized:', window.dolphin);
+      
+      // 2. Check Store
+      const store = window.dolphin.getStoreState('products');
+      console.log('📦 Products Store:', store);
+      
+      if (!store) {
+        console.error('❌ Products store not found!');
+        return;
+      }
+      
+      if (!store.items) {
+        console.error('❌ store.items not found!');
+        return;
+      }
+      console.log('✅ Items array:', store.items);
+      console.log('📊 Total items:', store.items.length);
+      
+      // 3. Check Template
+      const template = document.querySelector('#product-card');
+      if (!template) {
+        console.error('❌ Template #product-card not found!');
+        return;
+      }
+      console.log('✅ Template found:', template);
+      console.log('📄 Template content:', template.innerHTML.substring(0, 100) + '...');
+      
+      // 4. Check Binding Div
+      const bindingDiv = document.querySelector('[data-rt-bind="store/products"]');
+      if (!bindingDiv) {
+        console.error('❌ Binding div not found!');
+        return;
+      }
+      console.log('✅ Binding div found:', bindingDiv);
+      console.log('📄 Current HTML:', bindingDiv.innerHTML.substring(0, 200));
+      
+      // 5. Count rendered products
+      const renderedCards = bindingDiv.querySelectorAll('.bg-white');
+      console.log('📊 Rendered cards:', renderedCards.length);
+      
+      if (renderedCards.length === 0) {
+        console.error('❌ No products rendered!');
+        console.log('💡 Possible issues:');
+        console.log('   1. Template loop syntax wrong');
+        console.log('   2. Binding not working');
+        console.log('   3. Store not connected to DOM');
+      } else {
+        console.log('✅ Products successfully rendered!');
+      }
+      
+      console.log('═══════════════════════════════════');
+    }
+  </script>
+</body>
+</html>

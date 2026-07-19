@@ -224,11 +224,12 @@ export function attachRTBindings(clientProto: any) {
             if (template && typeof processedPayload === 'object' && processedPayload !== null) {
                 // Auto-detect if context is likely needed
                 const hasNestedPaths = template.match(/\w+\.\w+/g);
-                const hasChildDataBindings = el.querySelector('[data-api-]') || el.querySelector('[data-store-]') || el.querySelector('[data-rt-click]');
+                const hasChildDataBindings = (typeof el.querySelector === 'function') && 
+                    (el.querySelector('[data-api-]') || el.querySelector('[data-store-]') || el.querySelector('[data-rt-click]'));
                 const needsContext = (hasNestedPaths && hasChildDataBindings) || 
-                                     (el.getAttribute('data-rt-template')?.startsWith('#') && hasNestedPaths);
+                                     (typeof el.getAttribute === 'function' && el.getAttribute('data-rt-template')?.startsWith('#') && hasNestedPaths);
                 
-                if (needsContext && !el.hasAttribute('data-rt-type')) {
+                if (needsContext && typeof el.hasAttribute === 'function' && !el.hasAttribute('data-rt-type')) {
                     console.warn(`[Dolphin Template Warning] Element with template "${el.getAttribute('data-rt-template')}" likely needs data-rt-type="context" for nested data access.`);
                     console.warn(`  Hint: Add data-rt-type="context" to enable context drilling for child elements.`);
                 }

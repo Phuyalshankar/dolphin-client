@@ -207,8 +207,12 @@ export function patchDOM(parentElement: Element, newHTML: string) {
     if (typeof document === 'undefined') return;
     const temp = document.createElement(parentElement.tagName);
     temp.innerHTML = newHTML;
-    const childs1 = Array.from(parentElement.childNodes);
-    const childs2 = Array.from(temp.childNodes);
+
+    const filterNodes = (nList: NodeList) => 
+        Array.from(nList).filter(node => node.nodeType !== 3 || (node.textContent && node.textContent.trim() !== ''));
+
+    const childs1 = filterNodes(parentElement.childNodes);
+    const childs2 = filterNodes(temp.childNodes);
     const maxLen = Math.max(childs1.length, childs2.length);
     for (let i = 0; i < maxLen; i++) {
         if (i >= childs1.length) {
@@ -245,6 +249,7 @@ export function scheduleDOMUpdate(element: Element, newHTML: string) {
             });
             pendingUpdates.clear();
             rafScheduled = false;
+            hydrateIcons();
         });
     }
 }
@@ -262,4 +267,51 @@ export function resolveTemplate(el: Element): string | null {
         } catch {}
     }
     return template;
+}
+
+/** Asynchronously hydrates any Lucide icon spacers in the DOM, with localStorage caching */
+export function hydrateIcons(container: Element | Document = document) {
+    if (typeof document === 'undefined') return;
+    const spacers = container.querySelectorAll('.dolphin-icon-spacer');
+    if (spacers.length === 0) return;
+
+    spacers.forEach(async (span) => {
+        const iconName = span.getAttribute('data-icon-name');
+        if (!iconName) return;
+        const classes = (span.getAttribute('class') || '').replace('dolphin-icon-spacer', '').trim();
+        const cacheKey = `dolphin-icon-${iconName}`;
+
+        const injectClasses = (svgStr: string) => {
+            if (classes) {
+                if (svgStr.includes('class=')) {
+                    return svgStr.replace(/class="([^"]*)"/, `class="$1 ${classes}"`);
+                }
+                return svgStr.replace('<svg', `<svg class="${classes}"`);
+            }
+            return svgStr;
+        };
+
+        // 1. Try local storage cache
+        try {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                span.outerHTML = injectClasses(cached);
+                return;
+            }
+        } catch {}
+
+        // 2. Fetch from CDN
+        try {
+            const res = await fetch(`https://unpkg.com/lucide-static/icons/${iconName}.svg`);
+            if (res.ok) {
+                const rawSVG = await res.text();
+                try {
+                    localStorage.setItem(cacheKey, rawSVG);
+                } catch {}
+                span.outerHTML = injectClasses(rawSVG);
+            }
+        } catch (err) {
+            console.warn(`[Dolphin Lucide Hydration Warning]: Failed to fetch icon "${iconName}":`, err);
+        }
+    });
 }

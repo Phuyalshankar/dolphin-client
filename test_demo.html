@@ -43,7 +43,7 @@
           <h3 class="text-xs font-extrabold tracking-wider text-cyan-400 uppercase mb-2">Local Store: {{__storeName}}</h3>
           <div class="text-4xl font-extrabold text-white mb-4">{{count}}</div>
           <button 
-            data-rt-click="count = count + 1" 
+            data-store-click="count = count + 1" 
             class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer">
             Increment
           </button>
@@ -62,11 +62,11 @@
   </div>
 
   <!-- Load updated reactive client library -->
-  <script src="./dolphin-client.js" data-debug="true"></script>
+  <script src="./dolphin-client.js?v=2.0.1" data-debug="true"></script>
   <script>
     // Initialize Dolphin Client (will automatically resolve data-import and scan stores)
-    const dolphin = new DolphinModule.DolphinClient();
-    dolphin.connect().catch(err => console.log("Offline mode: running locally without WS server connection."));
+    window.dolphin = new DolphinModule.DolphinClient();
+    window.dolphin.connect().catch(err => console.log("Offline mode: running locally without WS server connection."));
   </script>
 </body>
 </html>

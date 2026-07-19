@@ -20,12 +20,7 @@ var DolphinModule = (() => {
   // src/index.ts
   var index_exports = {};
   __export(index_exports, {
-    $: () => $,
-    $$: () => $$,
-    DolphinClient: () => DolphinClient,
-    dolphinElement: () => dolphinElement,
-    dolphinQuery: () => dolphinQuery,
-    on: () => on
+    DolphinClient: () => DolphinClient
   });
 
   // src/api.ts
@@ -118,21 +113,9 @@ var DolphinModule = (() => {
         const baseEl = document.querySelector("base[href]");
         if (baseEl) {
           const href = baseEl.getAttribute("href") || "";
-          if (href) {
-            try {
-              const origin = typeof window !== "undefined" ? window.location.origin : void 0;
-              const resolvedUrl = new URL(href, origin);
-              const pathName = resolvedUrl.pathname;
-              if (pathName && pathName !== "/") {
-                const cleanPath2 = pathName.endsWith("/") ? pathName.slice(0, -1) : pathName;
-                baseUrl = `${this.client.httpUrl}${cleanPath2.startsWith("/") ? cleanPath2 : "/" + cleanPath2}`;
-              }
-            } catch (e) {
-              if (href !== "/" && !href.startsWith("http://") && !href.startsWith("https://")) {
-                const cleanHref = href.endsWith("/") ? href.slice(0, -1) : href;
-                baseUrl = `${this.client.httpUrl}${cleanHref.startsWith("/") ? cleanHref : "/" + cleanHref}`;
-              }
-            }
+          if (href && href !== "/") {
+            const cleanHref = href.endsWith("/") ? href.slice(0, -1) : href;
+            baseUrl = `${this.client.httpUrl}${cleanHref.startsWith("/") ? cleanHref : "/" + cleanHref}`;
           }
         } else {
           const metaBase = document.querySelector('meta[name="base-path"]');
@@ -306,8 +289,7 @@ var DolphinModule = (() => {
           ...fetchOptions
         });
         clearTimeout(timeoutId);
-        const isAuthRoute = path.includes("/api/auth/login") || path.includes("/api/auth/refresh") || path.includes("/api/auth/logout");
-        if (response.status === 401 && !_isRetry && !isAuthRoute && this.client.options.autoRefreshToken) {
+        if (response.status === 401 && !_isRetry && this.client.options.autoRefreshToken) {
           const refreshed = await this.client.auth._silentRefresh();
           if (refreshed) {
             return this.request(method, path, body, { ...options, _isRetry: true });
@@ -471,178 +453,20 @@ var DolphinModule = (() => {
   };
 
   // src/store.ts
-  var DataEngine = class {
-    _src = [];
-    _filtered = null;
-    _filters = /* @__PURE__ */ new Map();
-    _sortFn = null;
-    _version = 0;
-    constructor(initialData = []) {
-      this._src = [...initialData];
-    }
-    _invalidate() {
-      this._filtered = null;
-      this._version++;
-    }
-    getVersion() {
-      return this._version;
-    }
-    // ── Filters ──────────────────────────────────────────────
-    /** Text search across fields (case-insensitive) */
-    search(term, fields = []) {
-      if (!term || !term.trim()) {
-        this._filters.delete("__search__");
-      } else {
-        const t = term.trim().toLowerCase();
-        this._filters.set("__search__", (item) => {
-          const keys = fields.length ? fields : Object.keys(item);
-          return keys.some((k) => String(item[k] ?? "").toLowerCase().includes(t));
-        });
-      }
-      this._invalidate();
-      return this;
-    }
-    /** Exact value filter on a field */
-    filter(field, value) {
-      const key = `__filter_${String(field)}__`;
-      if (value === void 0 || value === null || value === "") {
-        this._filters.delete(key);
-      } else {
-        this._filters.set(key, (item) => item[field] === value);
-      }
-      this._invalidate();
-      return this;
-    }
-    /** Numeric range filter */
-    range(field, min, max) {
-      const key = `__range_${String(field)}__`;
-      this._filters.set(key, (item) => {
-        const v = Number(item[field]);
-        return !isNaN(v) && v >= min && v <= max;
-      });
-      this._invalidate();
-      return this;
-    }
-    /** Sort by field ascending or descending */
-    sort(field, asc = true) {
-      this._sortFn = (a, b) => {
-        const va = a[field], vb = b[field];
-        if (va == null && vb == null) return 0;
-        if (va == null) return asc ? 1 : -1;
-        if (vb == null) return asc ? -1 : 1;
-        if (typeof va === "number" && typeof vb === "number") {
-          return asc ? va - vb : vb - va;
-        }
-        return String(va).localeCompare(String(vb)) * (asc ? 1 : -1);
-      };
-      this._invalidate();
-      return this;
-    }
-    /** Clear all filters and sort */
-    clearFilters() {
-      this._filters.clear();
-      this._sortFn = null;
-      this._invalidate();
-      return this;
-    }
-    // ── Data Access ──────────────────────────────────────────
-    /** Get filtered + sorted results (lazy, cached) */
-    get() {
-      if (this._filtered !== null) return this._filtered;
-      let result = this._src;
-      for (const fn of this._filters.values()) {
-        result = result.filter(fn);
-      }
-      if (this._sortFn) {
-        result = [...result].sort(this._sortFn);
-      }
-      this._filtered = result;
-      return result;
-    }
-    /** Paginate the filtered result */
-    page(pageNum = 1, size = 10) {
-      const all = this.get();
-      const start = (pageNum - 1) * size;
-      const pages = Math.ceil(all.length / size);
-      return {
-        data: all.slice(start, start + size),
-        total: all.length,
-        page: pageNum,
-        size,
-        pages,
-        hasNext: pageNum < pages,
-        hasPrev: pageNum > 1
-      };
-    }
-    get length() {
-      return this.get().length;
-    }
-    get total() {
-      return this._src.length;
-    }
-    // ── CRUD ─────────────────────────────────────────────────
-    setSource(newData) {
-      this._src = [...newData];
-      this._invalidate();
-      return this;
-    }
-    add(item) {
-      this._src = [...this._src, item];
-      this._invalidate();
-      return this;
-    }
-    push(...items) {
-      this._src = [...this._src, ...items];
-      this._invalidate();
-      return this;
-    }
-    updateById(id, updates, key = "id") {
-      this._src = this._src.map(
-        (item) => item[key] === id ? { ...item, ...updates } : item
-      );
-      this._invalidate();
-      return this;
-    }
-    removeById(id, key = "id") {
-      this._src = this._src.filter((item) => item[key] !== id);
-      this._invalidate();
-      return this;
-    }
-    remove(predicate) {
-      this._src = this._src.filter((item, i) => !predicate(item, i));
-      this._invalidate();
-      return this;
-    }
-    /** Get raw source (unfiltered) */
-    getSource() {
-      return this._src;
-    }
-  };
   var DolphinStore = class {
     client;
     data;
     listeners;
     subscribed;
-    /** @fix: Store unsubscribe functions so destroy() can clean up WS subscriptions */
+    /** @fix: Store unsubscribe functions so destroy() can clean up WS subscriptions (was: subscriptions never removed) */
     _unsubscribers;
-    /** @fix: Race condition guard — tracks in-flight fetches */
-    _fetching;
-    /** Batch notification flag */
-    _batchPending;
-    /** Per-collection DataEngine instances */
-    _engines;
-    /** Per-item loading tracking: collectionName → Set of IDs being processed */
-    _trackingIds;
+    /** @param {DolphinClient} client */
     constructor(client) {
       this.client = client;
       this.data = /* @__PURE__ */ new Map();
       this.listeners = /* @__PURE__ */ new Set();
       this.subscribed = /* @__PURE__ */ new Set();
       this._unsubscribers = /* @__PURE__ */ new Map();
-      this._fetching = /* @__PURE__ */ new Set();
-      this._batchPending = false;
-      this._engines = /* @__PURE__ */ new Map();
-      this._trackingIds = /* @__PURE__ */ new Map();
       return new Proxy(this, {
         get: (target, prop) => {
           if (prop in target) return target[prop];
@@ -650,12 +474,9 @@ var DolphinModule = (() => {
         }
       });
     }
-    // ── Collection Access ────────────────────────────────────
     /** @private */
     _getCollection(name) {
       if (!this.data.has(name)) {
-        const engine = new DataEngine([]);
-        this._engines.set(name, engine);
         const collection = {
           _rawItems: [],
           items: [],
@@ -664,130 +485,21 @@ var DolphinModule = (() => {
           success: false,
           _filter: null,
           _sort: null,
-          // ── Legacy chainable API (storetutorial.md compatibility) ──
           where: (fn) => {
             collection._filter = fn;
-            this._applyTransform(collection, engine);
+            this._applyTransform(collection);
             return collection;
           },
           orderBy: (key, direction = "asc") => {
             collection._sort = { key, direction };
-            this._applyTransform(collection, engine);
+            this._applyTransform(collection);
             return collection;
           },
           reset: () => {
             collection._filter = null;
             collection._sort = null;
-            engine.clearFilters();
-            this._applyTransform(collection, engine);
+            this._applyTransform(collection);
             return collection;
-          },
-          // ── DataEngine powered API ──
-          search: (term, fields) => {
-            engine.search(term, fields);
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          filter: (field, value) => {
-            engine.filter(field, value);
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          range: (field, min, max) => {
-            engine.range(field, min, max);
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          sort: (field, asc = true) => {
-            engine.sort(field, asc);
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          clearFilters: () => {
-            engine.clearFilters();
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          page: (pageNum = 1, size = 10) => {
-            return engine.page(pageNum, size);
-          },
-          add: (item) => {
-            engine.add(item);
-            collection._rawItems = engine.getSource();
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          updateById: (id, updates, key = "id") => {
-            engine.updateById(id, updates, key);
-            collection._rawItems = engine.getSource();
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          deleteById: (id, key = "id") => {
-            engine.removeById(id, key);
-            collection._rawItems = engine.getSource();
-            this._applyTransform(collection, engine);
-            return collection;
-          },
-          // ── Optimistic Updates ──
-          /**
-           * Instantly removes item from UI, rolls back if API fails.
-           * @example await store.products.optimisticDelete(42, () => client.api.delete('/products/42'))
-           */
-          optimisticDelete: async (id, apiFn, key = "id") => {
-            const snapshot = [...collection._rawItems];
-            engine.removeById(id, key);
-            collection._rawItems = engine.getSource();
-            this._applyTransform(collection, engine);
-            try {
-              await apiFn();
-            } catch (err) {
-              engine.setSource(snapshot);
-              collection._rawItems = snapshot;
-              this._applyTransform(collection, engine);
-              throw err;
-            }
-          },
-          /**
-           * Instantly updates item in UI, rolls back if API fails.
-           * @example await store.products.optimisticUpdate(42, { price: 99 }, () => client.api.put('/products/42', { price: 99 }))
-           */
-          optimisticUpdate: async (id, updates, apiFn, key = "id") => {
-            const snapshot = [...collection._rawItems];
-            engine.updateById(id, updates, key);
-            collection._rawItems = engine.getSource();
-            this._applyTransform(collection, engine);
-            try {
-              await apiFn();
-            } catch (err) {
-              engine.setSource(snapshot);
-              collection._rawItems = snapshot;
-              this._applyTransform(collection, engine);
-              throw err;
-            }
-          },
-          // ── Per-item loading tracking ──
-          /**
-           * Track that a specific item ID is being processed (loading).
-           * @example store.products.trackStart(42) ... store.products.trackEnd(42)
-           */
-          trackStart: (id) => {
-            this._trackStart(name, id);
-            return collection;
-          },
-          trackEnd: (id) => {
-            this._trackEnd(name, id);
-            return collection;
-          },
-          /** Returns true if this specific item ID is being processed */
-          isLoading: (id) => {
-            return this._isTracking(name, id);
-          },
-          get length() {
-            return engine.length;
-          },
-          get total() {
-            return engine.total;
           }
         };
         this.data.set(name, collection);
@@ -795,69 +507,20 @@ var DolphinModule = (() => {
       }
       return this.data.get(name);
     }
-    // ── Internal Helpers ─────────────────────────────────────
-    /** 
-     * @private — apply legacy where/orderBy + DataEngine filters.
-     * engine is optional: if not provided (e.g. tests set data manually),
-     * falls back to state._rawItems directly.
-     */
-    _applyTransform(state, engine) {
-      let result = engine ? engine.get() : [...state._rawItems || []];
-      if (state._filter) {
-        result = result.filter(state._filter);
-      }
-      if (state._sort) {
-        const { key, direction } = state._sort;
-        result = [...result].sort((a, b) => {
-          if (a[key] === b[key]) return 0;
-          return (a[key] > b[key] ? 1 : -1) * (direction === "asc" ? 1 : -1);
-        });
-      }
-      state.items = result;
-      this._batchNotify();
-    }
-    /**
-     * @private — Batch multiple rapid store updates into a single DOM notify.
-     * Uses queueMicrotask in production for batching.
-     * In test environments (Jest), calls notify synchronously so assertions work.
-     */
-    _batchNotify() {
-      if (typeof process !== "undefined" && false) {
-        this._notify();
-        return;
-      }
-      if (this._batchPending) return;
-      this._batchPending = true;
-      const schedule = typeof queueMicrotask !== "undefined" ? queueMicrotask : (fn) => Promise.resolve().then(fn);
-      schedule(() => {
-        this._batchPending = false;
-        this._notify();
-      });
-    }
-    /**
-     * @private — Fetch from API and subscribe to WebSocket sync.
-     * @fix Bug 2: _fetching guard prevents race condition / double-fetch.
-     */
-    async _fetchAndSync(name, attempt = 0) {
-      if (this._fetching.has(name)) return;
-      this._fetching.add(name);
+    /** @private */
+    async _fetchAndSync(name) {
       const state = this.data.get(name);
-      const engine = this._engines.get(name);
       try {
         const res = await this.client.api.get(`/${name.toLowerCase()}`);
-        const rawItems = Array.isArray(res) ? res : res?.data ?? [];
-        state._rawItems = rawItems;
+        state._rawItems = Array.isArray(res) ? res : res.data || [];
         state.loading = false;
         state.success = true;
         state.error = null;
-        engine.setSource(rawItems);
-        this._applyTransform(state, engine);
+        this._applyTransform(state);
         if (!this.subscribed.has(name)) {
+          const unsubscribe = () => this.client.unsubscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
           const updateHandler = (update) => {
             this._handleRemoteUpdate(name, update);
-          };
-          const unsubscribe = () => {
-            this.client.unsubscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
           };
           this.client.subscribe(`db:sync/${name.toLowerCase()}`, updateHandler);
           this._unsubscribers.set(name, unsubscribe);
@@ -866,102 +529,60 @@ var DolphinModule = (() => {
       } catch (e) {
         state.loading = false;
         state.success = false;
-        state.error = e?.data?.error || e?.message || "Fetch failed";
-        this._batchNotify();
-        if (attempt < 3) {
-          const delay = Math.pow(2, attempt) * 1e3;
-          if (this.client.options?.debug) {
-            console.warn(`[Dolphin Store] Retrying "${name}" in ${delay}ms (attempt ${attempt + 1}/3)`);
-          }
-          setTimeout(() => {
-            this._fetching.delete(name);
-            this._fetchAndSync(name, attempt + 1);
-          }, delay);
-          return;
-        }
-      } finally {
-        if (attempt >= 3 || !state.error) {
-          this._fetching.delete(name);
-        }
+        state.error = e.data?.error || e.message || "Fetch failed";
+        this._notify();
       }
     }
-    // _applyTransform_legacy removed — _applyTransform now handles both cases (engine optional)
-    /** @private — Handle WebSocket real-time update for a collection */
+    /** @private */
+    _applyTransform(state) {
+      let result = [...state._rawItems];
+      if (state._filter) result = result.filter(state._filter);
+      if (state._sort) {
+        const { key, direction } = state._sort;
+        result.sort((a, b) => {
+          if (a[key] === b[key]) return 0;
+          return (a[key] > b[key] ? 1 : -1) * (direction === "asc" ? 1 : -1);
+        });
+      }
+      state.items = result;
+      this._notify();
+    }
+    /** @private */
     _handleRemoteUpdate(collection, update) {
       const state = this.data.get(collection);
       if (!state) return;
-      let engine = this._engines.get(collection);
-      if (!engine) {
-        engine = new DataEngine(state._rawItems || []);
-        this._engines.set(collection, engine);
-      } else {
-        if (engine.total !== (state._rawItems || []).length) {
-          engine.setSource(state._rawItems || []);
-        }
-      }
       const { type, data } = update;
+      let items = state._rawItems;
       if (type === "create") {
-        engine.push(data);
+        items = [...items, data];
       } else if (type === "update") {
-        const idKey = data.id != null ? "id" : "_id";
-        engine.updateById(data[idKey], data, idKey);
+        items = items.map((i) => i.id === data.id || i._id === data._id ? { ...i, ...data } : i);
       } else if (type === "delete") {
-        if (data.id != null) {
-          engine.removeById(data.id, "id");
-        } else if (data._id != null) {
-          engine.removeById(data._id, "_id");
-        }
+        items = items.filter((i) => {
+          if (data.id != null && i.id === data.id) return false;
+          if (data._id != null && i._id === data._id) return false;
+          return true;
+        });
       }
-      state._rawItems = engine.getSource();
-      this._applyTransform(state, engine);
+      state._rawItems = items;
+      this._applyTransform(state);
     }
-    // ── Per-item Loading Tracking ────────────────────────────
-    /** @private */
-    _trackStart(collection, id) {
-      if (!this._trackingIds.has(collection)) {
-        this._trackingIds.set(collection, /* @__PURE__ */ new Set());
-      }
-      this._trackingIds.get(collection).add(id);
-      this._batchNotify();
-    }
-    /** @private */
-    _trackEnd(collection, id) {
-      this._trackingIds.get(collection)?.delete(id);
-      this._batchNotify();
-    }
-    /** @private */
-    _isTracking(collection, id) {
-      return this._trackingIds.get(collection)?.has(id) ?? false;
-    }
-    // ── React useSyncExternalStore compatibility ─────────────
-    /** Subscribe for React useSyncExternalStore or external listeners */
+    /** Subscribe for React useSyncExternalStore */
     subscribe(listener) {
       this.listeners.add(listener);
       return () => this.listeners.delete(listener);
     }
-    /** Get snapshot of a collection (for useSyncExternalStore) */
+    /** @param {string} collection */
     getSnapshot(collection) {
-      return this.data.get(collection) || {
-        items: [],
-        loading: false,
-        error: null,
-        success: false
-      };
+      return this.data.get(collection) || { items: [], loading: false, error: null, success: false };
     }
     /** @private */
     _notify() {
-      this.listeners.forEach((l) => {
-        try {
-          l();
-        } catch {
-        }
-      });
+      this.listeners.forEach((l) => l());
     }
-    // ── Cleanup ──────────────────────────────────────────────
     /**
      * Clean up all WebSocket subscriptions and listeners.
      * Call this when the store is no longer needed to prevent resource leaks.
-     * @fix: Properly unsubscribes because updateHandler is now captured correctly.
      */
     destroy() {
       this._unsubscribers.forEach((unsub) => {
@@ -974,9 +595,6 @@ var DolphinModule = (() => {
       this.subscribed.clear();
       this.listeners.clear();
       this.data.clear();
-      this._engines.clear();
-      this._trackingIds.clear();
-      this._fetching.clear();
     }
   };
 
@@ -1000,15 +618,7 @@ var DolphinModule = (() => {
     /** @fix: Store timer ID so disconnect() can cancel pending reconnects (was: memory/logic leak) */
     _reconnectTimer;
     _attachedListeners;
-    constructor(urlArg = "", deviceIdArg = "", optionsArg = {}) {
-      let url = typeof urlArg === "string" ? urlArg : "";
-      let deviceId = typeof deviceIdArg === "string" ? deviceIdArg : "";
-      let options = optionsArg;
-      if (typeof urlArg === "object" && urlArg !== null) {
-        options = urlArg;
-      } else if (typeof deviceIdArg === "object" && deviceIdArg !== null) {
-        options = deviceIdArg;
-      }
+    constructor(url = "", deviceId = "", options = {}) {
       if (!url && typeof window !== "undefined") url = window.location.host;
       let protocol = "http:";
       if (url.startsWith("https://")) protocol = "https:";
@@ -1027,19 +637,8 @@ var DolphinModule = (() => {
         methodSpoofing: false,
         routerViewport: "main, #viewport, body",
         routerTransitions: true,
-        // @fix: Default to 'hash' routing so CDN/static hosting works with zero config.
-        // Hash URLs (#/register) are never sent to the server, so no _redirects or 404.html needed.
-        // Set routerMode: 'history' to use clean pushState URLs (requires server-side fallback).
-        routerMode: "hash",
         ...options
       };
-      if (typeof document !== "undefined" && !document.querySelector("base")) {
-        const base = document.createElement("base");
-        base.href = (typeof window !== "undefined" ? window.location.origin : "") + "/";
-        if (document.head) {
-          document.head.insertBefore(base, document.head.firstChild);
-        }
-      }
       this.socket = null;
       this.storage = typeof localStorage !== "undefined" ? localStorage : {
         getItem: () => null,
@@ -1092,22 +691,21 @@ var DolphinModule = (() => {
       return new Promise((resolve, reject) => {
         const protocol = this.httpUrl.startsWith("https") ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
-        if (this.options.debug) console.log(`[Dolphin] Connecting to ${wsUrl}...`);
+        console.log(`[Dolphin] Connecting to ${wsUrl}...`);
         this.socket = new WebSocket(wsUrl);
-        this.socket.binaryType = "arraybuffer";
         this.socket.onopen = () => {
-          if (this.options.debug) console.log(`[Dolphin] Connected as "${this.deviceId}" \u{1F42C}`);
+          console.log(`[Dolphin] Connected as "${this.deviceId}" \u{1F42C}`);
           this.reconnectAttempts = 0;
           this._flushOfflineQueue();
           resolve();
         };
         this.socket.onmessage = (ev) => this._handleMessage(ev.data);
         this.socket.onclose = () => {
-          if (this.options.debug) console.warn("[Dolphin] Connection closed");
+          console.warn("[Dolphin] Connection closed");
           this._maybeReconnect();
         };
         this.socket.onerror = (err) => {
-          if (this.options.debug) console.error("[Dolphin] WebSocket error:", err);
+          console.error("[Dolphin] WebSocket error:", err);
           reject(err);
         };
       });
@@ -1128,115 +726,8 @@ var DolphinModule = (() => {
       }
       this.cleanupDomListeners();
     }
-    /**
-     * Decode a binary WebSocket frame from ESP8266 / IoT devices.
-     *
-     * Frame format:
-     *   [1 byte TYPE][1 byte TOPIC_LEN][TOPIC_LEN bytes topic][...payload]
-     *
-     * TYPE values:
-     *   0x01 = string  → [2 bytes len][utf8 bytes]           → { value: string }
-     *   0x02 = float32 → [4 bytes IEEE-754 big-endian]       → { value: number }
-     *   0x03 = uint16  → [2 bytes big-endian]                → { value: number }
-     *   0x04 = int16   → [2 bytes signed big-endian]         → { value: number }
-     *   0x05 = uint8   → [1 byte]                            → { value: number }
-     *   0x06 = JSON    → [2 bytes len][utf8 json bytes]      → parsed object
-     *   0x07 = multi   → [1 byte count][[1B klen][key][4B f32]...] → { key: value }
-     *
-     * Arduino/ESP8266 example (float32):
-     *   void sendF32(const char* topic, float v) {
-     *     uint8_t tl = strlen(topic);
-     *     uint8_t buf[2 + tl + 4];
-     *     buf[0] = 0x02; buf[1] = tl;
-     *     memcpy(&buf[2], topic, tl);
-     *     union { float f; uint8_t b[4]; } u; u.f = v;
-     *     buf[2+tl]=u.b[3]; buf[3+tl]=u.b[2]; buf[4+tl]=u.b[1]; buf[5+tl]=u.b[0];
-     *     webSocket.sendBIN(buf, sizeof(buf));
-     *   }
-     * @private
-     */
-    _decodeBinary(buf) {
-      if (buf.byteLength < 2) return null;
-      const view = new DataView(buf);
-      const u8 = new Uint8Array(buf);
-      const type = view.getUint8(0);
-      const topicLen = view.getUint8(1);
-      if (buf.byteLength < 2 + topicLen) return null;
-      const topic = new TextDecoder().decode(u8.slice(2, 2 + topicLen));
-      const off = 2 + topicLen;
-      let payload;
-      switch (type) {
-        case 1: {
-          if (buf.byteLength < off + 2) return null;
-          const slen = view.getUint16(off, false);
-          if (buf.byteLength < off + 2 + slen) return null;
-          payload = { value: new TextDecoder().decode(u8.slice(off + 2, off + 2 + slen)) };
-          break;
-        }
-        case 2:
-          if (buf.byteLength < off + 4) return null;
-          payload = { value: Math.round(view.getFloat32(off, false) * 1e3) / 1e3 };
-          break;
-        case 3:
-          if (buf.byteLength < off + 2) return null;
-          payload = { value: view.getUint16(off, false) };
-          break;
-        case 4:
-          if (buf.byteLength < off + 2) return null;
-          payload = { value: view.getInt16(off, false) };
-          break;
-        case 5:
-          if (buf.byteLength < off + 1) return null;
-          payload = { value: view.getUint8(off) };
-          break;
-        case 6: {
-          if (buf.byteLength < off + 2) return null;
-          const jlen = view.getUint16(off, false);
-          if (buf.byteLength < off + 2 + jlen) return null;
-          try {
-            payload = JSON.parse(new TextDecoder().decode(u8.slice(off + 2, off + 2 + jlen)));
-          } catch {
-            return null;
-          }
-          break;
-        }
-        case 7: {
-          if (buf.byteLength < off + 1) return null;
-          const count = view.getUint8(off);
-          payload = {};
-          let cursor = off + 1;
-          for (let i = 0; i < count; i++) {
-            if (buf.byteLength < cursor + 1) break;
-            const klen = view.getUint8(cursor++);
-            if (buf.byteLength < cursor + klen + 4) break;
-            const key = new TextDecoder().decode(u8.slice(cursor, cursor + klen));
-            cursor += klen;
-            payload[key] = Math.round(view.getFloat32(cursor, false) * 1e3) / 1e3;
-            cursor += 4;
-          }
-          break;
-        }
-        default:
-          return null;
-      }
-      return { topic, payload };
-    }
     /** @private */
     _handleMessage(data) {
-      if (data instanceof ArrayBuffer) {
-        const decoded = this._decodeBinary(data);
-        if (decoded) {
-          if (this.options.debug) {
-            console.log("%c\u{1F4E5} [Dolphin Binary]:", "color: #22d3ee; font-weight: bold;", decoded);
-          }
-          this.handlers.forEach((cbs, pattern) => {
-            if (this._matchTopic(pattern, decoded.topic)) {
-              cbs.forEach((cb) => cb(decoded.payload, decoded.topic));
-            }
-          });
-        }
-        return;
-      }
       try {
         const msg = JSON.parse(data);
         if (this.options.debug) {
@@ -1319,14 +810,14 @@ var DolphinModule = (() => {
       if (this.reconnectAttempts < this.options.maxReconnect) {
         this.reconnectAttempts++;
         const delay = Math.pow(2, this.reconnectAttempts) * 1e3;
-        if (this.options.debug) console.log(`[Dolphin] Reconnecting in ${delay / 1e3}s (attempt ${this.reconnectAttempts})...`);
+        console.log(`[Dolphin] Reconnecting in ${delay / 1e3}s (attempt ${this.reconnectAttempts})...`);
         this._reconnectTimer = setTimeout(() => {
           this._reconnectTimer = null;
           this.connect().catch(() => {
           });
         }, delay);
       } else {
-        if (this.options.debug) console.error("[Dolphin] Max reconnect attempts reached.");
+        console.error("[Dolphin] Max reconnect attempts reached.");
       }
     }
     // ── Pub/Sub ───────────────────────────────────────────────────────────────
@@ -1372,40 +863,6 @@ var DolphinModule = (() => {
      */
     pubPush(topic, payload) {
       this._sendRaw({ type: "pub", topic, payload });
-    }
-    /**
-     * Send a binary float32 frame to an ESP8266 / IoT device.
-     * Encodes: [0x02][topicLen][topic][float32 big-endian]
-     *
-     * ESP8266 Arduino receive example:
-     *   webSocket.onEvent([](uint8_t num, WStype_t type, uint8_t* payload, size_t len) {
-     *     if (type == WStype_BIN && len >= 2) {
-     *       uint8_t tl = payload[1];
-     *       // topic = payload[2..2+tl]
-     *       union { uint8_t b[4]; float f; } u;
-     *       u.b[3]=payload[2+tl]; u.b[2]=payload[3+tl];
-     *       u.b[1]=payload[4+tl]; u.b[0]=payload[5+tl];
-     *       float value = u.f; // use value
-     *     }
-     *   });
-     *
-     * @param {string} topic
-     * @param {number} value  - float32 value (e.g. 1.0 to set brightness)
-     */
-    publishBinary(topic, value) {
-      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-        console.warn("[Dolphin] publishBinary: WebSocket not connected");
-        return;
-      }
-      const topicBytes = new TextEncoder().encode(topic);
-      const buf = new ArrayBuffer(2 + topicBytes.length + 4);
-      const view = new DataView(buf);
-      const u8 = new Uint8Array(buf);
-      view.setUint8(0, 2);
-      view.setUint8(1, topicBytes.length);
-      u8.set(topicBytes, 2);
-      view.setFloat32(2 + topicBytes.length, value, false);
-      this.socket.send(buf);
     }
     /**
      * Request historical data from a topic.
@@ -1534,452 +991,359 @@ var DolphinModule = (() => {
     }
   };
 
-  // src/vfs.ts
-  var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
-    "js",
-    "ts",
-    "jsx",
-    "tsx",
-    "json",
-    "md",
-    "txt",
-    "html",
-    "css",
-    "scss",
-    "sass",
-    "xml",
-    "yaml",
-    "yml",
-    "toml",
-    "env",
-    "sh",
-    "bat",
-    "ps1",
-    "py",
-    "rb",
-    "go",
-    "rs",
-    "java",
-    "c",
-    "cpp",
-    "h",
-    "cs",
-    "php",
-    "sql",
-    "graphql",
-    "vue",
-    "svelte",
-    "ini",
-    "cfg",
-    "gitignore",
-    "npmignore",
-    "log"
-  ]);
-  var MAX_FILE_SIZE_BYTES = 1e6;
-  function isTextFile(name) {
-    const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    return TEXT_EXTENSIONS.has(ext);
-  }
-  function scanVFSBinds(client) {
-    if (typeof document === "undefined") return;
-    const vfsContainers = document.querySelectorAll("[data-dolphin-vfs]");
-    vfsContainers.forEach((container) => {
-      if (container._vfsInitialized) return;
-      container._vfsInitialized = true;
-      const listenerAbort = new AbortController();
-      const { signal } = listenerAbort;
-      container._vfsAbort = () => listenerAbort.abort();
-      const treeEl = container.querySelector("[data-vfs-tree]") || container.querySelector("#file-tree-container");
-      const editorEl = container.querySelector("[data-vfs-editor]") || container.querySelector("#editor-textarea");
-      const breadcrumbsEl = container.querySelector("[data-vfs-breadcrumbs]") || container.querySelector("#active-file-crumb");
-      const statusEl = container.querySelector("[data-vfs-status]") || container.querySelector("#editor-status");
-      const newFileBtn = container.querySelector("[data-vfs-new-file]") || container.querySelector('[title="New File"]');
-      const newFolderBtn = container.querySelector("[data-vfs-new-folder]");
-      const mountBtn = container.querySelector("[data-vfs-mount]");
-      const saveBtn = container.querySelector("[data-vfs-save]");
-      let currentDirHandle = null;
-      let activeFileHandle = null;
-      let activeFilePath = null;
-      const mockVFS = [
-        {
-          name: "src",
-          type: "directory",
-          expanded: true,
-          children: [
-            { name: "index.js", type: "file", content: "// Dolphin VFS Root\nconsole.log('Dolphin agent active.');\n" },
-            { name: "utils.js", type: "file", content: "export const add = (a, b) => a + b;\nexport const sub = (a, b) => a - b;" }
-          ]
-        },
-        {
-          name: "config",
-          type: "directory",
-          expanded: false,
-          children: [
-            { name: "settings.json", type: "file", content: '{\n  "theme": "dark",\n  "port": 3000\n}' }
-          ]
-        },
-        {
-          name: "package.json",
-          type: "file",
-          content: '{\n  "name": "dolphin-agent-project",\n  "version": "1.0.0",\n  "description": "AI agent workspace"\n}'
-        },
-        {
-          name: "README.md",
-          type: "file",
-          content: "# Dolphin Agent Workspace\nUse this VS Code-styled file explorer to manage agent workflows."
-        }
-      ];
-      async function buildDirectoryTree(dirHandle) {
-        const items = [];
-        try {
-          for await (const entry of dirHandle.values()) {
-            if (entry.kind === "directory") {
-              items.push({
-                name: entry.name,
-                type: "directory",
-                handle: entry,
-                expanded: false,
-                children: []
-              });
-            } else {
-              items.push({
-                name: entry.name,
-                type: "file",
-                handle: entry,
-                content: null
-              });
+  // src/dom.ts
+  function attachDOMBinding(clientProto) {
+    const componentPromiseCache = /* @__PURE__ */ new Map();
+    function escapeRegExp(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function evaluateExpression(expr, ctx) {
+      if (!ctx || typeof ctx !== "object") return void 0;
+      try {
+        const safeCtx = new Proxy(ctx, {
+          has(target, prop) {
+            return true;
+          },
+          get(target, prop) {
+            if (typeof prop === "string") {
+              if (prop in target) return target[prop];
+              if (typeof globalThis !== "undefined" && prop in globalThis) return globalThis[prop];
+              if (typeof window !== "undefined" && prop in window) return window[prop];
             }
+            return void 0;
           }
-        } catch (err) {
-          console.error("[Dolphin VFS] Error reading directory handle:", err);
-        }
-        return items.sort((a, b) => {
-          if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
-          return a.name.localeCompare(b.name);
         });
+        const fn = new Function("ctx", `with(ctx) { return (${expr}); }`);
+        return fn(safeCtx);
+      } catch {
+        return ctx[expr];
       }
-      async function renderVFSTree() {
-        if (!treeEl) return;
-        treeEl.innerHTML = "";
-        if (currentDirHandle) {
-          const treeData = await buildDirectoryTree(currentDirHandle);
-          await renderNodeList(treeData, treeEl, 0, "");
+    }
+    function splitByUnquotedChar(str, char) {
+      const parts = [];
+      let current = "";
+      let inSingleQuote = false;
+      let inDoubleQuote = false;
+      let inBacktick = false;
+      let depth = 0;
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === "'" && !inDoubleQuote && !inBacktick) {
+          inSingleQuote = !inSingleQuote;
+        } else if (c === '"' && !inSingleQuote && !inBacktick) {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (c === "`" && !inSingleQuote && !inDoubleQuote) {
+          inBacktick = !inBacktick;
+        } else if (c === "(" || c === "[" || c === "{") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
+        } else if (c === ")" || c === "]" || c === "}") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
+        }
+        if (c === char && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
+          parts.push(current);
+          current = "";
         } else {
-          await renderNodeList(mockVFS, treeEl, 0, "");
+          current += c;
         }
       }
-      async function renderNodeList(items, parentContainer, depth, parentPath) {
-        for (const item of items) {
-          const currentPath = parentPath ? `${parentPath}/${item.name}` : item.name;
-          const isActive = activeFilePath === currentPath;
-          const nodeEl = document.createElement("div");
-          nodeEl.style.cssText = [
-            `padding-left: ${depth * 12 + 10}px`,
-            "display: flex",
-            "align-items: center",
-            "height: 26px",
-            "cursor: pointer",
-            "font-size: 13px",
-            "user-select: none",
-            "transition: background 0.15s, color 0.15s",
-            "border-radius: 4px",
-            "margin: 1px 6px",
-            "font-family: Consolas, 'Courier New', monospace",
-            isActive ? "background-color: rgba(255,255,255,0.08); color: #ffffff;" : "background-color: transparent; color: #cccccc;"
-          ].join(";");
-          nodeEl.addEventListener("mouseenter", () => {
-            if (activeFilePath !== currentPath)
-              nodeEl.style.backgroundColor = "rgba(255,255,255,0.04)";
-            deleteBtn.style.opacity = "0.5";
-          }, { signal });
-          nodeEl.addEventListener("mouseleave", () => {
-            if (activeFilePath !== currentPath)
-              nodeEl.style.backgroundColor = "transparent";
-            deleteBtn.style.opacity = "0";
-          }, { signal });
-          const icon = document.createElement("span");
-          icon.style.cssText = "margin-right:8px;font-size:14px;flex-shrink:0;";
-          if (item.type === "directory") {
-            icon.innerHTML = item.expanded ? "&#128194;" : "&#128193;";
-          } else {
-            const ext = item.name.split(".").pop()?.toLowerCase() ?? "";
-            if (ext === "js" || ext === "ts" || ext === "jsx" || ext === "tsx")
-              icon.innerHTML = "&#128220;";
-            else if (ext === "json") icon.innerHTML = "&#9881;&#65039;";
-            else if (ext === "md") icon.innerHTML = "&#128393;";
-            else if (ext === "css" || ext === "html" || ext === "scss")
-              icon.innerHTML = "&#127912;";
-            else icon.innerHTML = "&#128196;";
-          }
-          nodeEl.appendChild(icon);
-          const label = document.createElement("span");
-          label.textContent = item.name;
-          label.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-          nodeEl.appendChild(label);
-          const deleteBtn = document.createElement("span");
-          deleteBtn.innerHTML = "&#128465;";
-          deleteBtn.title = "Delete";
-          deleteBtn.style.cssText = [
-            "cursor:pointer",
-            "font-size:12px",
-            "opacity:0",
-            "transition:opacity 0.2s,transform 0.1s",
-            "padding:2px 4px",
-            "flex-shrink:0"
-          ].join(";");
-          deleteBtn.addEventListener("mouseover", (e) => {
-            e.stopPropagation();
-            deleteBtn.style.opacity = "1";
-            deleteBtn.style.transform = "scale(1.2)";
-          }, { signal });
-          deleteBtn.addEventListener("mouseout", (e) => {
-            e.stopPropagation();
-            deleteBtn.style.opacity = "0.5";
-            deleteBtn.style.transform = "scale(1)";
-          }, { signal });
-          deleteBtn.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (!confirm(`Delete "${item.name}"?`)) return;
-            try {
-              if (currentDirHandle) {
-                const parentDir = await resolveDirHandleForPath(parentPath);
-                await parentDir.removeEntry(item.name, { recursive: true });
-              } else {
-                deleteMockItem(mockVFS, currentPath.split("/"));
+      parts.push(current);
+      return parts;
+    }
+    function splitFirstUnquotedColon(str) {
+      let inSingleQuote = false;
+      let inDoubleQuote = false;
+      let inBacktick = false;
+      let depth = 0;
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === "'" && !inDoubleQuote && !inBacktick) {
+          inSingleQuote = !inSingleQuote;
+        } else if (c === '"' && !inSingleQuote && !inBacktick) {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (c === "`" && !inSingleQuote && !inDoubleQuote) {
+          inBacktick = !inBacktick;
+        } else if (c === "(" || c === "[" || c === "{") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
+        } else if (c === ")" || c === "]" || c === "}") {
+          if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
+        }
+        if (c === ":" && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
+          return [str.slice(0, i), str.slice(i + 1)];
+        }
+      }
+      return null;
+    }
+    function resolveTemplate(el) {
+      const template = el.getAttribute("data-rt-template");
+      if (!template) return null;
+      if (typeof document !== "undefined" && !template.includes("<")) {
+        try {
+          const tempEl = document.querySelector(template);
+          if (tempEl) return tempEl.innerHTML;
+        } catch {
+        }
+      }
+      return template;
+    }
+    function renderTemplate(templateStr, context) {
+      if (!templateStr.includes("{#if") && !templateStr.includes("{#each")) {
+        let result = templateStr;
+        for (let key in context) {
+          const escapedKey = key.replace(/[.*+?^$${}()|[\]\\]/g, "\\$&");
+          result = result.replace(new RegExp("\\{\\{" + escapedKey + "\\}}", "g"), context[key] !== void 0 && context[key] !== null ? context[key] : "");
+        }
+        result = result.replace(/\{\{([\s\S]*?)\}\}/g, (match, expr) => {
+          const trimmed = expr.trim();
+          if (!trimmed) return "";
+          if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(?:\??\.[a-zA-Z_$][a-zA-Z0-9_$]*)+$/.test(trimmed)) {
+            const parts = trimmed.split(/\??\./);
+            let val = context;
+            for (const part of parts) {
+              if (val === void 0 || val === null) {
+                val = void 0;
+                break;
               }
-              if (activeFilePath === currentPath) {
-                activeFilePath = null;
-                activeFileHandle = null;
-                if (editorEl) {
-                  editorEl.value = "";
-                  editorEl.disabled = true;
-                }
-                if (breadcrumbsEl) breadcrumbsEl.textContent = "No file open";
-                if (statusEl) statusEl.textContent = "Ready";
-              }
-              renderVFSTree();
-            } catch (err) {
-              alert("Failed to delete: " + err.message);
+              val = val[part];
             }
-          }, { signal });
-          nodeEl.appendChild(deleteBtn);
-          nodeEl.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (item.type === "directory") {
-              item.expanded = !item.expanded;
-              renderVFSTree();
-            } else {
-              activeFilePath = currentPath;
-              let content = "";
-              if (currentDirHandle && item.handle) {
-                activeFileHandle = item.handle;
-                if (!isTextFile(item.name)) {
-                  content = `// [Binary or unsupported file: ${item.name}]
-// Cannot display this file type in the text editor.`;
-                } else {
-                  try {
-                    const file = await item.handle.getFile();
-                    if (file.size > MAX_FILE_SIZE_BYTES) {
-                      content = `// [File too large to display: ${(file.size / 1024).toFixed(1)} KB]
-// Max displayable size is 1 MB.`;
-                    } else {
-                      content = await file.text();
+            return val !== void 0 && val !== null ? val : "";
+          }
+          return match;
+        });
+        return result;
+      }
+      try {
+        const escapeString = (str) => {
+          return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+        };
+        let compiled = 'let out = "";\n';
+        let lastIndex = 0;
+        const regex = /(\{\{([\s\S]*?)\}\}|\{#if\s+([\s\S]*?)\}|\{:else\s+if\s+([\s\S]*?)\}|\{:else\}|\{\/if\}|\{#each\s+([\s\S]*?)\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s*,\s*([a-zA-Z_$][a-zA-Z0-9_$]*))?\}|\{\/each\}|\{([^{}]+?)\})/g;
+        const eachStack = [];
+        let match;
+        while ((match = regex.exec(templateStr)) !== null) {
+          const plainText = templateStr.slice(lastIndex, match.index);
+          if (plainText) {
+            compiled += `out += "${escapeString(plainText)}";
+`;
+          }
+          const token = match[0];
+          if (token.startsWith("{{")) {
+            const expr = match[2];
+            compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");
+`;
+          } else if (token.startsWith("{#if")) {
+            const expr = match[3];
+            compiled += `if (${expr}) {
+`;
+          } else if (token.startsWith("{:else if")) {
+            const expr = match[4];
+            compiled += `} else if (${expr}) {
+`;
+          } else if (token.startsWith("{:else}")) {
+            compiled += `} else {
+`;
+          } else if (token.startsWith("{/if}")) {
+            compiled += `}
+`;
+          } else if (token.startsWith("{#each")) {
+            const expr = match[5];
+            const itemVar = match[6];
+            const indexVar = match[7];
+            eachStack.push({ indexVar });
+            compiled += `if (typeof ${expr} !== "undefined" && ${expr} !== null && Array.isArray(${expr})) {
+`;
+            if (indexVar) {
+              compiled += `  let ${indexVar} = 0;
+`;
+            }
+            compiled += `  for (let ${itemVar} of ${expr}) {
+`;
+          } else if (token.startsWith("{/each}")) {
+            const info = eachStack.pop();
+            if (info && info.indexVar) {
+              compiled += `    ${info.indexVar}++;
+`;
+            }
+            compiled += `  }
+}
+`;
+          } else if (token.startsWith("{")) {
+            const expr = match[8];
+            if (expr) {
+              compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");
+`;
+            }
+          }
+          lastIndex = regex.lastIndex;
+        }
+        const remaining = templateStr.slice(lastIndex);
+        if (remaining) {
+          compiled += `out += "${escapeString(remaining)}";
+`;
+        }
+        compiled += "return out;\n";
+        const fnBody = `
+                with (context) {
+                    try {
+                        ${compiled}
+                    } catch (innerErr) {
+                        console.warn('[Dolphin Template Eval Warning]:', innerErr);
+                        return '';
                     }
-                  } catch (err) {
-                    content = `// Error reading file: ${err.message}`;
-                  }
                 }
-              } else {
-                content = item.content ?? "";
+            `;
+        let safeContext = context;
+        if (typeof Proxy !== "undefined" && context !== null && typeof context === "object") {
+          safeContext = new Proxy(context, {
+            has(target, key) {
+              if (typeof key === "symbol") return false;
+              return true;
+            },
+            get(target, key) {
+              if (key === Symbol.unscopables) return void 0;
+              if (key in target) return target[key];
+              if (typeof globalThis !== "undefined" && key in globalThis) {
+                return globalThis[key];
               }
-              if (editorEl) {
-                editorEl.value = content;
-                editorEl.disabled = false;
-                editorEl.focus();
+              if (typeof window !== "undefined" && key in window) {
+                return window[key];
               }
-              if (breadcrumbsEl) breadcrumbsEl.textContent = currentPath;
-              if (statusEl) statusEl.textContent = `UTF-8 | Lines: ${content.split("\n").length}`;
-              renderVFSTree();
+              return void 0;
             }
-          }, { signal });
-          parentContainer.appendChild(nodeEl);
-          if (item.type === "directory" && item.expanded) {
-            const childContainer = document.createElement("div");
-            if (currentDirHandle && item.handle) {
-              const subTree = await buildDirectoryTree(item.handle);
-              await renderNodeList(subTree, childContainer, depth + 1, currentPath);
-            } else if (item.children) {
-              await renderNodeList(item.children, childContainer, depth + 1, currentPath);
-            }
-            parentContainer.appendChild(childContainer);
-          }
+          });
         }
-      }
-      async function resolveDirHandleForPath(pathStr) {
-        if (!pathStr || pathStr.trim() === "") return currentDirHandle;
-        const parts = pathStr.split("/").filter(Boolean);
-        let current = currentDirHandle;
-        for (const part of parts) {
-          current = await current.getDirectoryHandle(part);
+        const fn = new Function("context", fnBody);
+        return fn(safeContext);
+      } catch (e) {
+        console.error("[Dolphin Template Compiler Error]:", e);
+        let fallback = templateStr;
+        for (let key in context) {
+          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          fallback = fallback.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, "g"), context[key] !== void 0 && context[key] !== null ? context[key] : "");
         }
-        return current;
+        return fallback;
       }
-      function deleteMockItem(items, pathParts) {
-        const target = pathParts[0];
-        const idx = items.findIndex((i) => i.name === target);
-        if (idx === -1) return;
-        if (pathParts.length === 1) {
-          items.splice(idx, 1);
-        } else if (items[idx].children) {
-          deleteMockItem(items[idx].children, pathParts.slice(1));
-        }
-      }
-      function updateMockItem(items, pathParts, content) {
-        const target = pathParts[0];
-        const match = items.find((i) => i.name === target);
-        if (!match) return;
-        if (pathParts.length === 1 && match.type === "file") {
-          match.content = content;
-        } else if (match.children) {
-          updateMockItem(match.children, pathParts.slice(1), content);
-        }
-      }
-      async function saveActiveFile() {
-        if (!editorEl || !activeFilePath) return;
-        const content = editorEl.value;
-        if (currentDirHandle && activeFileHandle) {
-          let writable = null;
-          try {
-            writable = await activeFileHandle.createWritable();
-            await writable.write(content);
-            if (statusEl) statusEl.textContent = `Saved: ${activeFilePath} \u2714`;
-          } catch (err) {
-            alert("Failed to save file: " + err.message);
-          } finally {
-            if (writable) {
-              try {
-                await writable.close();
-              } catch (_) {
-              }
-            }
-          }
-        } else {
-          updateMockItem(mockVFS, activeFilePath.split("/"), content);
-          if (statusEl) statusEl.textContent = `Saved (mock): ${activeFilePath} \u2714`;
-        }
-      }
-      if (editorEl) {
-        editorEl.addEventListener("input", (e) => {
-          if (statusEl)
-            statusEl.textContent = `Editing... | Lines: ${e.target.value.split("\n").length}`;
-        }, { signal });
-        editorEl.addEventListener("keydown", (e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-            e.preventDefault();
-            saveActiveFile();
-          }
-        }, { signal });
-      }
-      if (saveBtn) {
-        saveBtn.addEventListener("click", (e) => {
-          e.preventDefault();
-          saveActiveFile();
-        }, { signal });
-      }
-      if (mountBtn) {
-        mountBtn.addEventListener("click", async (e) => {
-          e.preventDefault();
-          if (typeof window.showDirectoryPicker !== "function") {
-            alert("File System Access API is not supported. Use Chrome, Edge, or Opera.");
+    }
+    function sanitizeHTML(html) {
+      if (typeof document === "undefined") return html;
+      try {
+        const parser = new DOMParser();
+        const hasBodyOrHtml = /<\s*(?:body|html)\b/i.test(html);
+        const parseString = hasBodyOrHtml ? html : `<body>${html}</body>`;
+        const doc = parser.parseFromString(parseString, "text/html");
+        const body = doc.body;
+        const sanitizeNode = (el) => {
+          const tag = el.tagName.toLowerCase();
+          if (["script", "iframe", "object", "embed", "link", "style", "meta", "applet", "svg"].includes(tag)) {
+            el.parentNode?.removeChild(el);
             return;
           }
-          try {
-            currentDirHandle = await window.showDirectoryPicker();
-            activeFilePath = null;
-            activeFileHandle = null;
-            if (editorEl) {
-              editorEl.value = "";
-              editorEl.disabled = true;
+          const attrs = el.attributes;
+          for (let i = attrs.length - 1; i >= 0; i--) {
+            const attrName = attrs[i].name.toLowerCase();
+            const attrVal = attrs[i].value.toLowerCase();
+            if (attrName.startsWith("on")) {
+              el.removeAttribute(attrs[i].name);
+            } else if (["src", "href", "data"].includes(attrName) && (attrVal.includes("javascript:") || attrVal.includes("data:text/html"))) {
+              el.removeAttribute(attrs[i].name);
             }
-            if (breadcrumbsEl) breadcrumbsEl.textContent = `Mounted: ${currentDirHandle.name}`;
-            if (statusEl) statusEl.textContent = `VFS active: ${currentDirHandle.name}`;
-            renderVFSTree();
-          } catch (err) {
-            if (err?.name !== "AbortError")
-              console.warn("[Dolphin VFS] Directory mount cancelled or failed:", err);
           }
-        }, { signal });
+          Array.from(el.children).forEach(sanitizeNode);
+        };
+        Array.from(body.children).forEach(sanitizeNode);
+        return body.innerHTML;
+      } catch {
+        return html;
       }
-      if (newFileBtn) {
-        newFileBtn.addEventListener("click", async (e) => {
-          e.preventDefault();
-          const name = prompt("Enter new file name:");
-          if (!name || !name.trim()) return;
-          try {
-            if (currentDirHandle) {
-              let targetDir = currentDirHandle;
-              if (activeFilePath) {
-                const parts = activeFilePath.split("/");
-                parts.pop();
-                if (parts.length > 0)
-                  targetDir = await resolveDirHandleForPath(parts.join("/"));
-              }
-              await targetDir.getFileHandle(name.trim(), { create: true });
-            } else {
-              mockVFS.push({ name: name.trim(), type: "file", content: "" });
+    }
+    function diffDOM(existingNode, newNode) {
+      if (existingNode.nodeType !== newNode.nodeType) {
+        existingNode.parentNode?.replaceChild(newNode.cloneNode(true), existingNode);
+        return;
+      }
+      if (existingNode.nodeType === Node.TEXT_NODE) {
+        if (existingNode.textContent !== newNode.textContent) {
+          existingNode.textContent = newNode.textContent;
+        }
+        return;
+      }
+      if (existingNode.nodeType === Node.ELEMENT_NODE) {
+        const el1 = existingNode;
+        const el2 = newNode;
+        if (el1.tagName !== el2.tagName) {
+          el1.parentNode?.replaceChild(el2.cloneNode(true), el1);
+          return;
+        }
+        const attr1 = el1.attributes;
+        const attr2 = el2.attributes;
+        for (let i = attr1.length - 1; i >= 0; i--) {
+          const name = attr1[i].name;
+          if (!el2.hasAttribute(name)) el1.removeAttribute(name);
+        }
+        for (let i = 0; i < attr2.length; i++) {
+          const name = attr2[i].name;
+          const val = attr2[i].value;
+          if (el1.getAttribute(name) !== val) el1.setAttribute(name, val);
+        }
+        if (el1.tagName === "INPUT" || el1.tagName === "TEXTAREA") {
+          if (el1.value !== el2.value) el1.value = el2.value;
+          if (el1.checked !== el2.checked) el1.checked = el2.checked;
+        } else if (el1.tagName === "SELECT") {
+          if (el1.value !== el2.value) el1.value = el2.value;
+        }
+        const childs1 = Array.from(el1.childNodes);
+        const childs2 = Array.from(el2.childNodes);
+        const len1 = childs1.length;
+        const len2 = childs2.length;
+        const maxLen = Math.max(len1, len2);
+        for (let i = 0; i < maxLen; i++) {
+          if (i >= len1) {
+            el1.appendChild(childs2[i].cloneNode(true));
+          } else if (i >= len2) {
+            el1.removeChild(childs1[i]);
+          } else {
+            diffDOM(childs1[i], childs2[i]);
+          }
+        }
+      }
+    }
+    function patchDOM(parentElement, newHTML) {
+      if (typeof document === "undefined") return;
+      const temp = document.createElement(parentElement.tagName);
+      temp.innerHTML = newHTML;
+      const childs1 = Array.from(parentElement.childNodes);
+      const childs2 = Array.from(temp.childNodes);
+      const len1 = childs1.length;
+      const len2 = childs2.length;
+      const maxLen = Math.max(len1, len2);
+      for (let i = 0; i < maxLen; i++) {
+        if (i >= len1) {
+          parentElement.appendChild(childs2[i].cloneNode(true));
+        } else if (i >= len2) {
+          parentElement.removeChild(childs1[i]);
+        } else {
+          diffDOM(childs1[i], childs2[i]);
+        }
+      }
+    }
+    const pendingUpdates = /* @__PURE__ */ new Map();
+    let rafScheduled = false;
+    function scheduleDOMUpdate(element, newHTML) {
+      pendingUpdates.set(element, newHTML);
+      if (!rafScheduled) {
+        rafScheduled = true;
+        const scheduleFn = typeof requestAnimationFrame !== "undefined" ? requestAnimationFrame : (cb) => setTimeout(cb, 0);
+        scheduleFn(() => {
+          pendingUpdates.forEach((html, el) => {
+            if (el.isConnected !== false) {
+              patchDOM(el, html);
             }
-            renderVFSTree();
-          } catch (err) {
-            alert("Failed to create file: " + err.message);
-          }
-        }, { signal });
+          });
+          pendingUpdates.clear();
+          rafScheduled = false;
+        });
       }
-      if (newFolderBtn) {
-        newFolderBtn.addEventListener("click", async (e) => {
-          e.preventDefault();
-          const name = prompt("Enter new folder name:");
-          if (!name || !name.trim()) return;
-          try {
-            if (currentDirHandle) {
-              let targetDir = currentDirHandle;
-              if (activeFilePath) {
-                const parts = activeFilePath.split("/");
-                parts.pop();
-                if (parts.length > 0)
-                  targetDir = await resolveDirHandleForPath(parts.join("/"));
-              }
-              await targetDir.getDirectoryHandle(name.trim(), { create: true });
-            } else {
-              mockVFS.push({ name: name.trim(), type: "directory", expanded: true, children: [] });
-            }
-            renderVFSTree();
-          } catch (err) {
-            alert("Failed to create folder: " + err.message);
-          }
-        }, { signal });
-      }
-      renderVFSTree();
-    });
-  }
-
-  // src/dom/store-bindings.ts
-  var _storeReadCache = /* @__PURE__ */ new Map();
-  function _invalidateStoreReadCache() {
-    _storeReadCache.clear();
-  }
-  if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") {
-    const _domObserver = new MutationObserver(() => {
-      _invalidateStoreReadCache();
-    });
-    document.addEventListener("DOMContentLoaded", () => {
-      _domObserver.observe(document.body || document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributeFilter: ["data-store-read"]
-      });
-    }, { once: true });
-  }
-  function attachStoreBindings(clientProto) {
+    }
     clientProto.setStoreState = function(storeName, key, val, originEl) {
       this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
       if (!this.uiStores.has(storeName)) {
@@ -1991,14 +1355,7 @@ var DolphinModule = (() => {
         console.log(`%c\u{1F4BE} [Dolphin Store Update]:`, "color: #ec4899; font-weight: bold;", `${storeName}.${key}`, "=", val);
       }
       if (typeof document !== "undefined") {
-        const cacheKey = `${storeName}.${key}`;
-        let readElements;
-        if (_storeReadCache.has(cacheKey)) {
-          readElements = _storeReadCache.get(cacheKey);
-        } else {
-          readElements = Array.from(document.querySelectorAll(`[data-store-read="${cacheKey}"]`));
-          _storeReadCache.set(cacheKey, readElements);
-        }
+        const readElements = document.querySelectorAll(`[data-store-read="${storeName}.${key}"]`);
         readElements.forEach((el) => {
           if (el === originEl) return;
           if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
@@ -2024,71 +1381,6 @@ var DolphinModule = (() => {
     };
     clientProto._scanStoreBinds = function() {
       if (typeof document === "undefined") return;
-      const storeElements = document.querySelectorAll("dolphin-store");
-      storeElements.forEach((el) => {
-        if (typeof el.getAttribute !== "function") return;
-        const storeName = el.getAttribute("name") || el.getAttribute("data-store");
-        if (!storeName) return;
-        const hasChildren = el.children && el.children.length > 0;
-        if (hasChildren) {
-          if (typeof el.setAttribute === "function") {
-            el.setAttribute("data-rt-bind", `store/${storeName}`);
-            el.setAttribute("data-rt-type", "context");
-          }
-        } else {
-          if (el.style) el.style.display = "none";
-        }
-        if (!hasChildren) {
-          const content = el.textContent ? el.textContent.trim() : "";
-          if (content && content.startsWith("{")) {
-            try {
-              const parsed = JSON.parse(content);
-              if (parsed && typeof parsed === "object") {
-                Object.keys(parsed).forEach((key) => {
-                  this.setStoreState(storeName, key, parsed[key]);
-                });
-              }
-            } catch (err) {
-              console.error(`[Dolphin Store Init Error] Failed to parse JSON inside <dolphin-store name="${storeName}">:`, err);
-            }
-          }
-        }
-        const templateSelector = el.getAttribute("template");
-        if (el.attributes) {
-          const excludeAttrs = ["name", "data-store", "style", "data-rt-bind", "data-rt-type", "template"];
-          Array.from(el.attributes).forEach((attr) => {
-            if (!excludeAttrs.includes(attr.name)) {
-              let val = attr.value;
-              if (val === "true") val = true;
-              else if (val === "false") val = false;
-              else if (val === "null") val = null;
-              else if (!isNaN(Number(val)) && val.trim() !== "") val = Number(val);
-              this.setStoreState(storeName, attr.name, val);
-            }
-          });
-        }
-        if (templateSelector && !hasChildren && el.parentNode && typeof document !== "undefined") {
-          const markerId = `_ds_${storeName}_${templateSelector.replace(/[^a-z0-9]/gi, "_")}`;
-          let wrapper = document.querySelector(`[data-ds-wired="${markerId}"]`);
-          if (!wrapper) {
-            wrapper = document.createElement("div");
-            wrapper.setAttribute("data-rt-bind", `store/${storeName}`);
-            wrapper.setAttribute("data-rt-template", templateSelector);
-            wrapper.setAttribute("data-ds-wired", markerId);
-            el.parentNode.insertBefore(wrapper, el.nextSibling);
-          }
-          if (typeof this._updateDOM === "function") {
-            this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
-            const currentStore = this.uiStores.get(storeName) || {};
-            this._updateDOM(`store/${storeName}`, currentStore);
-          }
-        }
-        if (hasChildren && typeof this._updateDOM === "function") {
-          this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
-          const currentStore = this.uiStores.get(storeName) || {};
-          this._updateDOM(`store/${storeName}`, currentStore);
-        }
-      });
       const writeEls = document.querySelectorAll("[data-store-write]");
       writeEls.forEach((el) => {
         const writeBind = el.getAttribute("data-store-write");
@@ -2099,9 +1391,13 @@ var DolphinModule = (() => {
             const key = parts[1];
             const val = el.type === "checkbox" ? el.checked : el.value;
             this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
-            if (!this.uiStores.has(storeName)) this.uiStores.set(storeName, {});
+            if (!this.uiStores.has(storeName)) {
+              this.uiStores.set(storeName, {});
+            }
             const store = this.uiStores.get(storeName);
-            if (store[key] === void 0) store[key] = val;
+            if (store[key] === void 0) {
+              store[key] = val;
+            }
           }
         }
       });
@@ -2116,8 +1412,11 @@ var DolphinModule = (() => {
             const val = this.getStoreState(storeName, key);
             if (val !== void 0 && val !== null) {
               if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
-                if (el.type === "checkbox") el.checked = !!val;
-                else el.value = val;
+                if (el.type === "checkbox") {
+                  el.checked = !!val;
+                } else {
+                  el.value = val;
+                }
               } else {
                 el.textContent = val;
               }
@@ -2141,43 +1440,11 @@ var DolphinModule = (() => {
     clientProto._executeStoreAction = function(expression, element) {
       this.uiStores = this.uiStores || /* @__PURE__ */ new Map();
       const parentCtx = element && typeof this.getClosestContext === "function" ? this.getClosestContext(element) : null;
-      const getClosestStoreName = (el) => {
-        if (!el) return null;
-        let cursor = el;
-        while (cursor) {
-          const bind = cursor.getAttribute && cursor.getAttribute("data-rt-bind");
-          if (bind && bind.startsWith("store/")) return bind.slice(6);
-          const dsName = cursor.getAttribute && (cursor.getAttribute("name") || cursor.getAttribute("data-store"));
-          if (dsName && cursor.tagName && cursor.tagName.toLowerCase() === "dolphin-store") return dsName;
-          cursor = cursor.parentElement;
-        }
-        return null;
-      };
-      const closestStoreName = getClosestStoreName(element);
       const context = new Proxy({}, {
-        has: (_target, _prop) => true,
-        set: (_target, prop, val) => {
-          if (typeof prop === "string") {
-            if (closestStoreName && parentCtx && prop in parentCtx) {
-              this.setStoreState(closestStoreName, prop, val);
-              return true;
-            }
-            if (this.uiStores) {
-              for (const [sName, sState] of this.uiStores) {
-                if (prop in sState) {
-                  this.setStoreState(sName, prop, val);
-                  return true;
-                }
-              }
-            }
-            if (closestStoreName) {
-              this.setStoreState(closestStoreName, prop, val);
-              return true;
-            }
-          }
-          return false;
+        has: (target, prop) => {
+          return true;
         },
-        get: (_target, prop) => {
+        get: (target, prop) => {
           if (typeof prop === "string") {
             if (prop === "log") {
               return (arg) => {
@@ -2188,47 +1455,32 @@ var DolphinModule = (() => {
                   });
                   console.log(`%c\u{1F4CA} [Dolphin All UI Stores]:`, "color: #06b6d4; font-weight: bold;", allStores);
                 } else if (arg && typeof arg === "object" && arg.__isStoreProxy__) {
-                  const sn = arg.__storeName__;
-                  console.log(`%c\u{1F4CA} [Dolphin Store: ${sn}]:`, "color: #06b6d4; font-weight: bold;", this.uiStores.get(sn) ? { ...this.uiStores.get(sn) } : {});
+                  const storeName = arg.__storeName__;
+                  const store = this.uiStores.get(storeName);
+                  console.log(`%c\u{1F4CA} [Dolphin Store: ${storeName}]:`, "color: #06b6d4; font-weight: bold;", store ? { ...store } : {});
                 } else {
                   console.log(`%c\u{1F4CA} [Dolphin Log]:`, "color: #06b6d4; font-weight: bold;", arg);
                 }
               };
             }
-            if (this.store && this.store.data && typeof this.store.data.has === "function" && this.store.data.has(prop)) {
-              const collection = this.store.data.get(prop);
-              const self = this;
-              const collectionName = prop;
-              const RENDER_METHODS = /* @__PURE__ */ new Set(["search", "filter", "range", "sort", "clearFilters", "where", "orderBy", "reset", "add", "updateById", "deleteById", "optimisticDelete", "optimisticUpdate", "trackStart", "trackEnd"]);
-              return new Proxy(collection, {
-                get(target, method) {
-                  if (typeof target[method] === "function") {
-                    return (...args) => {
-                      const result = target[method](...args);
-                      if (RENDER_METHODS.has(method) && typeof self._updateDOM === "function") {
-                        const triggerRender = () => {
-                          if (typeof self._updateDOM === "function") self._updateDOM(`store/${collectionName}`, collection);
-                        };
-                        if (result && typeof result.then === "function") result.then(triggerRender).catch(triggerRender);
-                        else triggerRender();
-                      }
-                      return result;
-                    };
-                  }
-                  return target[method];
-                }
-              });
+            if (parentCtx && parentCtx[prop] !== void 0) {
+              return parentCtx[prop];
             }
-            if (parentCtx && parentCtx[prop] !== void 0) return parentCtx[prop];
-            if (typeof globalThis !== "undefined" && prop in globalThis) return globalThis[prop];
-            if (typeof window !== "undefined" && prop in window) return window[prop];
+            if (typeof globalThis !== "undefined" && prop in globalThis) {
+              return globalThis[prop];
+            }
+            if (typeof window !== "undefined" && prop in window) {
+              return window[prop];
+            }
             return new Proxy({}, {
-              get: (_sub, subProp) => {
+              get: (subTarget, subProp) => {
                 if (subProp === "__storeName__") return prop;
                 if (subProp === "__isStoreProxy__") return true;
-                if (typeof subProp === "string") return this.getStoreState(prop, subProp);
+                if (typeof subProp === "string") {
+                  return this.getStoreState(prop, subProp);
+                }
               },
-              set: (_sub, subProp, val) => {
+              set: (subTarget, subProp, val) => {
                 if (typeof subProp === "string") {
                   this.setStoreState(prop, subProp, val);
                   return true;
@@ -2244,356 +1496,260 @@ var DolphinModule = (() => {
         fn(context);
       } catch (err) {
         console.error("%c[Dolphin Store Action Error]:", "color: #ef4444; font-weight: bold;", err);
-        if (element) console.error("%cFailed Element:", "color: #f97316; font-weight: bold;", element);
+        if (element) {
+          console.error("%cFailed Element:", "color: #f97316; font-weight: bold;", element);
+        }
         console.error("%cFailed Expression:", "color: #3b82f6; font-style: italic;", expression);
       }
     };
-  }
-
-  // src/dom/helpers.ts
-  function escapeRegExp(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
-  function splitByUnquotedChar(str, char) {
-    const parts = [];
-    let current = "";
-    let inSingleQuote = false;
-    let inDoubleQuote = false;
-    let inBacktick = false;
-    let depth = 0;
-    for (let i = 0; i < str.length; i++) {
-      const c = str[i];
-      if (c === "'" && !inDoubleQuote && !inBacktick) {
-        inSingleQuote = !inSingleQuote;
-      } else if (c === '"' && !inSingleQuote && !inBacktick) {
-        inDoubleQuote = !inDoubleQuote;
-      } else if (c === "`" && !inSingleQuote && !inDoubleQuote) {
-        inBacktick = !inBacktick;
-      } else if (c === "(" || c === "[" || c === "{") {
-        if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
-      } else if (c === ")" || c === "]" || c === "}") {
-        if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
-      }
-      if (c === char && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
-        parts.push(current);
-        current = "";
-      } else {
-        current += c;
-      }
-    }
-    parts.push(current);
-    return parts;
-  }
-  function splitFirstUnquotedColon(str) {
-    let inSingleQuote = false;
-    let inDoubleQuote = false;
-    let inBacktick = false;
-    let depth = 0;
-    for (let i = 0; i < str.length; i++) {
-      const c = str[i];
-      if (c === "'" && !inDoubleQuote && !inBacktick) {
-        inSingleQuote = !inSingleQuote;
-      } else if (c === '"' && !inSingleQuote && !inBacktick) {
-        inDoubleQuote = !inDoubleQuote;
-      } else if (c === "`" && !inSingleQuote && !inDoubleQuote) {
-        inBacktick = !inBacktick;
-      } else if (c === "(" || c === "[" || c === "{") {
-        if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth++;
-      } else if (c === ")" || c === "]" || c === "}") {
-        if (!inSingleQuote && !inDoubleQuote && !inBacktick) depth--;
-      }
-      if (c === ":" && !inSingleQuote && !inDoubleQuote && !inBacktick && depth === 0) {
-        return [str.slice(0, i), str.slice(i + 1)];
-      }
-    }
-    return null;
-  }
-  function evaluateExpression(expr, ctx) {
-    if (!ctx || typeof ctx !== "object") return void 0;
-    try {
-      const safeCtx = new Proxy(ctx, {
-        has(target, prop) {
-          return true;
-        },
-        get(target, prop) {
-          if (typeof prop === "string") {
-            if (prop in target) return target[prop];
-            if (typeof globalThis !== "undefined" && prop in globalThis) return globalThis[prop];
-            if (typeof window !== "undefined" && prop in window) return window[prop];
-          }
-          return void 0;
-        }
-      });
-      const fn = new Function("ctx", `with(ctx) { return (${expr}); }`);
-      return fn(safeCtx);
-    } catch {
-      return ctx[expr];
-    }
-  }
-  function sanitizeHTML(html) {
-    if (typeof document === "undefined") return html;
-    try {
-      const parser = new DOMParser();
-      const hasBodyOrHtml = /<\s*(?:body|html)\b/i.test(html);
-      const parseString = hasBodyOrHtml ? html : `<body>${html}</body>`;
-      const doc = parser.parseFromString(parseString, "text/html");
-      const body = doc.body;
-      const sanitizeNode = (el) => {
-        const tag = el.tagName.toLowerCase();
-        if (["script", "iframe", "object", "embed", "link", "style", "meta", "applet", "svg"].includes(tag)) {
-          el.parentNode?.removeChild(el);
-          return;
-        }
-        const attrs = el.attributes;
-        for (let i = attrs.length - 1; i >= 0; i--) {
-          const attrName = attrs[i].name.toLowerCase();
-          const attrVal = attrs[i].value.toLowerCase();
-          if (attrName.startsWith("on")) {
-            el.removeAttribute(attrs[i].name);
-          } else if (["src", "href", "data"].includes(attrName) && (attrVal.includes("javascript:") || attrVal.includes("data:text/html"))) {
-            el.removeAttribute(attrs[i].name);
-          }
-        }
-        Array.from(el.children).forEach(sanitizeNode);
-      };
-      Array.from(body.children).forEach(sanitizeNode);
-      return body.innerHTML;
-    } catch {
-      return html;
-    }
-  }
-  function executeScripts(container) {
-    if (typeof document === "undefined") return;
-    const scripts = container.querySelectorAll("script");
-    scripts.forEach((oldScript) => {
-      const newScript = document.createElement("script");
-      if (oldScript.attributes) {
-        Array.from(oldScript.attributes).forEach((attr) => newScript.setAttribute(attr.name, attr.value));
-      }
-      newScript.textContent = oldScript.textContent;
-      oldScript.parentNode?.replaceChild(newScript, oldScript);
-    });
-  }
-  function diffDOM(existingNode, newNode) {
-    if (existingNode.nodeType !== newNode.nodeType) {
-      existingNode.parentNode?.replaceChild(newNode.cloneNode(true), existingNode);
-      return;
-    }
-    if (existingNode.nodeType === Node.TEXT_NODE) {
-      if (existingNode.textContent !== newNode.textContent) {
-        existingNode.textContent = newNode.textContent;
-      }
-      return;
-    }
-    if (existingNode.nodeType === Node.ELEMENT_NODE) {
-      const el1 = existingNode;
-      const el2 = newNode;
-      if (el1.tagName !== el2.tagName) {
-        el1.parentNode?.replaceChild(el2.cloneNode(true), el1);
-        return;
-      }
-      const attr1 = el1.attributes;
-      const attr2 = el2.attributes;
-      for (let i = attr1.length - 1; i >= 0; i--) {
-        const name = attr1[i].name;
-        if (!el2.hasAttribute(name)) el1.removeAttribute(name);
-      }
-      for (let i = 0; i < attr2.length; i++) {
-        const name = attr2[i].name;
-        const val = attr2[i].value;
-        if (el1.getAttribute(name) !== val) el1.setAttribute(name, val);
-      }
-      if (el1.tagName === "INPUT" || el1.tagName === "TEXTAREA") {
-        if (el1.value !== el2.value) el1.value = el2.value;
-        if (el1.checked !== el2.checked) el1.checked = el2.checked;
-      } else if (el1.tagName === "SELECT") {
-        if (el1.value !== el2.value) el1.value = el2.value;
-      }
-      const childs1 = Array.from(el1.childNodes);
-      const childs2 = Array.from(el2.childNodes);
-      const maxLen = Math.max(childs1.length, childs2.length);
-      for (let i = 0; i < maxLen; i++) {
-        if (i >= childs1.length) {
-          el1.appendChild(childs2[i].cloneNode(true));
-        } else if (i >= childs2.length) {
-          el1.removeChild(childs1[i]);
-        } else {
-          diffDOM(childs1[i], childs2[i]);
-        }
-      }
-    }
-  }
-  function patchDOM(parentElement, newHTML) {
-    if (typeof document === "undefined") return;
-    const temp = document.createElement(parentElement.tagName);
-    temp.innerHTML = newHTML;
-    const childs1 = Array.from(parentElement.childNodes);
-    const childs2 = Array.from(temp.childNodes);
-    const maxLen = Math.max(childs1.length, childs2.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (i >= childs1.length) {
-        parentElement.appendChild(childs2[i].cloneNode(true));
-      } else if (i >= childs2.length) {
-        parentElement.removeChild(childs1[i]);
-      } else {
-        diffDOM(childs1[i], childs2[i]);
-      }
-    }
-  }
-  var pendingUpdates = /* @__PURE__ */ new Map();
-  var rafScheduled = false;
-  function scheduleDOMUpdate(element, newHTML) {
-    if (typeof element.isConnected === "boolean" && !element.isConnected) return;
-    pendingUpdates.set(element, newHTML);
-    if (!rafScheduled) {
-      rafScheduled = true;
-      const scheduleFn = typeof requestAnimationFrame !== "undefined" ? requestAnimationFrame : (cb) => setTimeout(cb, 0);
-      scheduleFn(() => {
-        pendingUpdates.forEach((html, el) => {
-          if (el.isConnected !== false) {
-            patchDOM(el, html);
-          }
-        });
-        pendingUpdates.clear();
-        rafScheduled = false;
-      });
-    }
-  }
-  function resolveTemplate(el) {
-    const template = el.getAttribute("data-rt-template");
-    if (!template) return null;
-    if (typeof document !== "undefined" && !template.includes("<")) {
-      try {
-        const tempEl = document.querySelector(template);
-        if (tempEl) return tempEl.innerHTML;
-      } catch {
-      }
-    }
-    return template;
-  }
-
-  // src/dom/template.ts
-  function renderTemplate(templateStr, context) {
-    if (!templateStr.includes("{#if") && !templateStr.includes("{#each")) {
-      let result = templateStr;
-      for (let key in context) {
-        const escapedKey = key.replace(/[.*+?^$${}()|[\]\\]/g, "\\$&");
-        result = result.replace(
-          new RegExp("\\{\\{" + escapedKey + "\\}\\}", "g"),
-          context[key] !== void 0 && context[key] !== null ? context[key] : ""
-        );
-      }
-      result = result.replace(/\{\{([\s\S]*?)\}\}/g, (match, expr) => {
-        const trimmed = expr.trim();
-        if (!trimmed) return "";
-        if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(?:(?:\??\.[a-zA-Z_$][a-zA-Z0-9_$]*))+$/.test(trimmed)) {
-          const parts = trimmed.split(/\??\./).filter(Boolean);
-          let val = context;
-          for (const part of parts) {
-            if (val === void 0 || val === null) {
-              val = void 0;
-              break;
+    clientProto._initDOMBinding = function() {
+      if (this._domInitialized) return;
+      this._domInitialized = true;
+      const PUSH_EVENTS = ["input", "change", "keyup", "paste", "blur"];
+      const debounceTimers = /* @__PURE__ */ new WeakMap();
+      PUSH_EVENTS.forEach((evtName) => {
+        this.addDomListener(document, evtName, (e) => {
+          if (!e.target || !e.target.getAttribute) return;
+          const writeBind = e.target.getAttribute("data-store-write");
+          if (writeBind) {
+            const parts = writeBind.split(".");
+            if (parts.length === 2) {
+              const storeName = parts[0];
+              const key = parts[1];
+              const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+              this.setStoreState(storeName, key, val, e.target);
             }
-            val = val[part];
           }
-          return val !== void 0 && val !== null ? val : "";
-        }
-        return match;
-      });
-      return result;
-    }
-    try {
-      const escapeString = (str) => str.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
-      let compiled = 'let out = "";\n';
-      let lastIndex = 0;
-      const regex = /(\{\{([\s\S]*?)\}\}|\{#if\s+([\s\S]*?)\}|\{:else\s+if\s+([\s\S]*?)\}|\{:else\}|\{\/if\}|\{#each\s+([\s\S]*?)\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s*,\s*([a-zA-Z_$][a-zA-Z0-9_$]*))?\}|\{\/each\}|\{([^{}]+?)\})/g;
-      const eachStack = [];
-      let match;
-      while ((match = regex.exec(templateStr)) !== null) {
-        const plainText = templateStr.slice(lastIndex, match.index);
-        if (plainText) compiled += `out += "${escapeString(plainText)}";
-`;
-        const token = match[0];
-        if (token.startsWith("{{")) {
-          const expr = match[2];
-          compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");
-`;
-        } else if (token.startsWith("{#if")) {
-          compiled += `if (${match[3]}) {
-`;
-        } else if (token.startsWith("{:else if")) {
-          compiled += `} else if (${match[4]}) {
-`;
-        } else if (token.startsWith("{:else}")) {
-          compiled += `} else {
-`;
-        } else if (token.startsWith("{/if}")) {
-          compiled += `}
-`;
-        } else if (token.startsWith("{#each")) {
-          const expr = match[5];
-          const itemVar = match[6];
-          const indexVar = match[7];
-          eachStack.push({ indexVar });
-          compiled += `if (typeof ${expr} !== "undefined" && ${expr} !== null && Array.isArray(${expr})) {
-`;
-          if (indexVar) compiled += `  let ${indexVar} = 0;
-`;
-          compiled += `  for (let ${itemVar} of ${expr}) {
-`;
-        } else if (token.startsWith("{/each}")) {
-          const info = eachStack.pop();
-          if (info && info.indexVar) compiled += `    ${info.indexVar}++;
-`;
-          compiled += `  }
-}
-`;
-        } else if (token.startsWith("{")) {
-          const expr = match[8];
-          if (expr) compiled += `out += (${expr} !== undefined && ${expr} !== null ? ${expr} : "");
-`;
-        }
-        lastIndex = regex.lastIndex;
-      }
-      const remaining = templateStr.slice(lastIndex);
-      if (remaining) compiled += `out += "${escapeString(remaining)}";
-`;
-      compiled += "return out;\n";
-      const fnBody = `with (context) { try { ${compiled} } catch (innerErr) { console.warn('[Dolphin Template Eval Warning]:', innerErr); return ''; } }`;
-      let safeContext = context;
-      if (typeof Proxy !== "undefined" && context !== null && typeof context === "object") {
-        safeContext = new Proxy(context, {
-          has(target, key) {
-            if (typeof key === "symbol") return false;
-            return true;
-          },
-          get(target, key) {
-            if (key === Symbol.unscopables) return void 0;
-            if (key in target) return target[key];
-            if (typeof globalThis !== "undefined" && key in globalThis) return globalThis[key];
-            if (typeof window !== "undefined" && key in window) return window[key];
-            return void 0;
+          const rules = e.target.getAttribute("data-rt-validate");
+          const name = e.target.name;
+          if (rules && name && typeof this.validateField === "function") {
+            const form = e.target.closest("form");
+            const formValues = form ? Object.fromEntries(new FormData(form).entries()) : {};
+            const errorMsg = this.validateField(e.target.value, rules, formValues);
+            if (errorMsg) {
+              e.target.classList.add("invalid");
+              this.publish(`errors/${name}`, errorMsg);
+            } else {
+              e.target.classList.remove("invalid");
+              this.publish(`errors/${name}`, "");
+            }
+          }
+          const topic = e.target.getAttribute("data-rt-push");
+          if (topic) {
+            const debounceVal = e.target.getAttribute("data-rt-debounce");
+            const waitMs = debounceVal ? parseInt(debounceVal, 10) : 0;
+            const triggerPush = () => {
+              const payload = { name: e.target.name, value: e.target.value };
+              this.pubPush(topic, payload);
+            };
+            if (waitMs > 0) {
+              if (debounceTimers.has(e.target)) {
+                clearTimeout(debounceTimers.get(e.target));
+              }
+              const timer = setTimeout(triggerPush, waitMs);
+              debounceTimers.set(e.target, timer);
+            } else {
+              triggerPush();
+            }
           }
         });
+      });
+      this.addDomListener(document, "submit", async (e) => {
+        if (!e.target || !e.target.getAttribute) return;
+        const rtTopic = e.target.getAttribute("data-rt-submit");
+        const apiTarget = e.target.getAttribute("data-api-submit");
+        if (rtTopic || apiTarget) {
+          const formInputs = e.target.querySelectorAll("[name]");
+          formInputs.forEach((inputEl) => {
+            const name = inputEl.name;
+            if (name) {
+              this.publish(`errors/${name}`, "");
+              inputEl.classList.remove("invalid");
+            }
+          });
+          const validatedInputs = e.target.querySelectorAll("[data-rt-validate]");
+          let formIsValid = true;
+          if (validatedInputs.length > 0 && typeof this.validateField === "function") {
+            const formValues = Object.fromEntries(new FormData(e.target).entries());
+            validatedInputs.forEach((inputEl) => {
+              const rules = inputEl.getAttribute("data-rt-validate");
+              const name = inputEl.name;
+              if (rules && name) {
+                const errorMsg = this.validateField(inputEl.value, rules, formValues);
+                if (errorMsg) {
+                  formIsValid = false;
+                  inputEl.classList.add("invalid");
+                  this.publish(`errors/${name}`, errorMsg);
+                }
+              }
+            });
+          }
+          if (!formIsValid) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          const parentCtx = this.getClosestContext(e.target) || {};
+          const formData = new FormData(e.target);
+          const data = Object.fromEntries(formData.entries());
+          if (rtTopic) {
+            let resolvedTopic = rtTopic;
+            for (const k in parentCtx) {
+              const escapedK = escapeRegExp(k);
+              resolvedTopic = resolvedTopic.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] !== void 0 && parentCtx[k] !== null ? parentCtx[k] : "");
+            }
+            this.publish(resolvedTopic, data);
+          } else if (apiTarget) {
+            let resolvedTarget = apiTarget;
+            for (const k in parentCtx) {
+              const escapedK = escapeRegExp(k);
+              resolvedTarget = resolvedTarget.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] !== void 0 && parentCtx[k] !== null ? parentCtx[k] : "");
+            }
+            const parts = resolvedTarget.trim().split(" ");
+            let method = parts.length > 1 ? parts[0].toUpperCase() : "POST";
+            const path = parts.length > 1 ? parts[1] : parts[0];
+            if (data._method) {
+              method = String(data._method).toUpperCase();
+            }
+            try {
+              const result = await this.api.request(method, path, data);
+              const resultBind = e.target.getAttribute("data-api-result");
+              if (resultBind) this._updateDOM(resultBind, result);
+              const redirect = e.target.getAttribute("data-api-redirect");
+              if (redirect) window.location.href = redirect;
+              if (e.target.hasAttribute("data-api-reload")) window.location.reload();
+            } catch (err) {
+              console.error("[Dolphin] API Submit Error:", err);
+            }
+          }
+        }
+      });
+      const INTERACTION_EVENTS = ["click", "change", "submit", "input", "keydown", "keyup", "dblclick", "focus", "blur", "mouseenter", "mouseleave"];
+      INTERACTION_EVENTS.forEach((evtName) => {
+        this.addDomListener(document, evtName, async (e) => {
+          if (!e.target || !e.target.closest) return;
+          const rtBtn = e.target.closest(`[data-rt-${evtName}]`);
+          const apiBtn = e.target.closest(`[data-api-${evtName}]`);
+          if (rtBtn) {
+            if (evtName === "submit") e.preventDefault();
+            const topic = rtBtn.getAttribute(`data-rt-${evtName}`);
+            const actionData = rtBtn.getAttribute("data-rt-payload");
+            const parentCtx = this.getClosestContext(rtBtn) || {};
+            let payload = {};
+            if (actionData) {
+              let resolvedDataStr = actionData;
+              for (const k in parentCtx) {
+                const escapedK = escapeRegExp(k);
+                resolvedDataStr = resolvedDataStr.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] !== void 0 && parentCtx[k] !== null ? parentCtx[k] : "");
+              }
+              try {
+                payload = JSON.parse(resolvedDataStr);
+              } catch {
+                payload = {};
+              }
+            }
+            this.publish(topic, payload);
+          }
+          if (apiBtn) {
+            if (evtName === "submit") e.preventDefault();
+            const apiTarget = apiBtn.getAttribute(`data-api-${evtName}`);
+            const actionData = apiBtn.getAttribute("data-api-payload");
+            const parentCtx = this.getClosestContext(apiBtn) || {};
+            const parts = apiTarget.trim().split(" ");
+            const method = parts.length > 1 ? parts[0].toUpperCase() : "POST";
+            const path = parts.length > 1 ? parts[1] : parts[0];
+            let payload = null;
+            if (actionData) {
+              let resolvedDataStr = actionData;
+              for (const k in parentCtx) {
+                const escapedK = escapeRegExp(k);
+                resolvedDataStr = resolvedDataStr.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] !== void 0 && parentCtx[k] !== null ? parentCtx[k] : "");
+              }
+              try {
+                payload = JSON.parse(resolvedDataStr);
+              } catch {
+                payload = null;
+              }
+            }
+            try {
+              const result = await this.api.request(method, path, payload);
+              const resultBind = apiBtn.getAttribute("data-api-result");
+              if (resultBind) this._updateDOM(resultBind, result);
+              const redirect = apiBtn.getAttribute("data-api-redirect");
+              if (redirect) window.location.href = redirect;
+              if (apiBtn.hasAttribute("data-api-reload")) window.location.reload();
+            } catch (err) {
+              console.error(`[Dolphin] API ${evtName} Error:`, err);
+            }
+          }
+          const storeActionBtn = e.target.closest(`[data-store-${evtName}]`);
+          if (storeActionBtn) {
+            if (evtName === "submit") e.preventDefault();
+            const expr = storeActionBtn.getAttribute(`data-store-${evtName}`);
+            if (expr) {
+              this._executeStoreAction(expr, storeActionBtn);
+            }
+          }
+        });
+      });
+      this.subscribe("#", (payload, topic) => {
+        this._updateDOM(topic, payload);
+      });
+      this._scanAndFetchAPIBinds();
+      this._scanStoreBinds();
+      this._resolveImports();
+      this._initSPARouter();
+    };
+    clientProto._scanAndFetchAPIBinds = async function() {
+      if (typeof document === "undefined") return;
+      const elements = document.querySelectorAll("[data-api-get]");
+      for (const el of Array.from(elements)) {
+        const path = el.getAttribute("data-api-get");
+        if (!path) continue;
+        if (typeof el.hasAttribute === "function" && el.hasAttribute("data-api-initialized")) continue;
+        if (typeof el.setAttribute === "function") {
+          el.setAttribute("data-api-initialized", "true");
+        }
+        try {
+          const result = await this.api.get(path);
+          const apiStore = el.getAttribute("data-api-store");
+          if (apiStore) {
+            const parts = apiStore.split(".");
+            if (parts.length === 2) {
+              this.setStoreState(parts[0], parts[1], result);
+            }
+          }
+          const rtBind = el.getAttribute("data-rt-bind");
+          if (rtBind && !apiStore) {
+            this._updateDOM(rtBind, result);
+          } else if (!apiStore) {
+            const template = resolveTemplate(el);
+            if (template && typeof result === "object" && result !== null) {
+              const processedResult = this._applyDeclarativeDirectives(el, result);
+              if (Array.isArray(processedResult)) {
+                let combinedHTML = "";
+                for (const item of processedResult) {
+                  combinedHTML += renderTemplate(template, item);
+                }
+                scheduleDOMUpdate(el, combinedHTML);
+              } else {
+                scheduleDOMUpdate(el, renderTemplate(template, processedResult));
+              }
+            } else {
+              if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+                el.value = typeof result === "object" ? result.value !== void 0 ? result.value : "" : result;
+              } else {
+                const rawHTML = typeof result === "object" ? result.html || result.text || JSON.stringify(result) : String(result);
+                el.innerHTML = sanitizeHTML(rawHTML);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[Dolphin] API Get Error:", e);
+        }
       }
-      const fn = new Function("context", fnBody);
-      return fn(safeContext);
-    } catch (e) {
-      console.error("[Dolphin Template Compiler Error]:", e);
-      let fallback = templateStr;
-      for (let key in context) {
-        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        fallback = fallback.replace(
-          new RegExp(`\\{\\{${escapedKey}\\}\\}`, "g"),
-          context[key] !== void 0 && context[key] !== null ? context[key] : ""
-        );
-      }
-      return fallback;
-    }
-  }
-
-  // src/dom/rt-bindings.ts
-  function attachRTBindings(clientProto) {
+    };
     clientProto._applyDeclarativeDirectives = function(el, payload) {
       let processedPayload = payload;
       if (typeof payload === "object" && payload !== null) {
@@ -2667,13 +1823,18 @@ var DolphinModule = (() => {
                 }
                 if (field) {
                   result.sort((a, b) => {
-                    const resolveVal = (obj, path) => path.split(".").reduce((acc, part) => acc && acc[part], obj);
-                    let valA = resolveVal(a, field) ?? a[field];
-                    let valB = resolveVal(b, field) ?? b[field];
+                    const resolveVal = (obj, path) => {
+                      return path.split(".").reduce((acc, part) => acc && acc[part], obj);
+                    };
+                    let valA = resolveVal(a, field);
+                    let valB = resolveVal(b, field);
+                    if (valA === void 0) valA = a[field];
+                    if (valB === void 0) valB = b[field];
                     if (typeof valA === "string" && typeof valB === "string") {
                       return direction === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
                     }
-                    const numA = Number(valA), numB = Number(valB);
+                    const numA = Number(valA);
+                    const numB = Number(valB);
                     if (!isNaN(numA) && !isNaN(numB)) {
                       return direction === "asc" ? numA - numB : numB - numA;
                     }
@@ -2696,7 +1857,11 @@ var DolphinModule = (() => {
             }
           }
           if (foundArrayKey) {
-            processedPayload = { ...payload, [foundArrayKey]: applyFilterSearchSort(payload[foundArrayKey]) };
+            const processedArray = applyFilterSearchSort(payload[foundArrayKey]);
+            processedPayload = {
+              ...payload,
+              [foundArrayKey]: processedArray
+            };
           }
         }
       }
@@ -2709,28 +1874,6 @@ var DolphinModule = (() => {
         const processedPayload = this._applyDeclarativeDirectives(el, payload);
         if (el.getAttribute("data-rt-type") === "context" && typeof processedPayload === "object" && processedPayload !== null) {
           el._rtContext = processedPayload;
-          const BOOL_ATTRS = /* @__PURE__ */ new Set([
-            "disabled",
-            "checked",
-            "readonly",
-            "required",
-            "hidden",
-            "selected",
-            "multiple",
-            "autofocus",
-            "autoplay",
-            "controls",
-            "loop",
-            "muted",
-            "open",
-            "default",
-            "defer",
-            "async",
-            "allowfullscreen",
-            "formnovalidate",
-            "novalidate",
-            "reversed"
-          ]);
           const processNode = (node) => {
             if (node.hasAttribute("data-rt-text")) {
               const key = node.getAttribute("data-rt-text");
@@ -2743,7 +1886,9 @@ var DolphinModule = (() => {
               const key = node.getAttribute("data-rt-html");
               if (key) {
                 const val = evaluateExpression(key, processedPayload);
-                if (val !== void 0 && val !== null) node.innerHTML = sanitizeHTML(val);
+                if (val !== void 0 && val !== null) {
+                  node.innerHTML = sanitizeHTML(val);
+                }
               }
             }
             if (node.hasAttribute("data-rt-attr")) {
@@ -2756,13 +1901,8 @@ var DolphinModule = (() => {
                     const key = pair[1].trim();
                     if (attrName && key) {
                       const val = evaluateExpression(key, processedPayload);
-                      if (BOOL_ATTRS.has(attrName)) {
-                        if (val && val !== "false" && val !== "0" && val !== 0) node.setAttribute(attrName, "");
-                        else node.removeAttribute(attrName);
-                      } else if (val === false || val === null || val === void 0) {
-                        node.removeAttribute(attrName);
-                      } else {
-                        node.setAttribute(attrName, String(val));
+                      if (val !== void 0 && val !== null) {
+                        node.setAttribute(attrName, val);
                       }
                     }
                   }
@@ -2778,8 +1918,11 @@ var DolphinModule = (() => {
                     const className = pair[0].trim();
                     const key = pair[1].trim();
                     const classNames = className.split(/\s+/).filter(Boolean);
-                    if (evaluateExpression(key, processedPayload)) classNames.forEach((c) => node.classList.add(c));
-                    else classNames.forEach((c) => node.classList.remove(c));
+                    if (evaluateExpression(key, processedPayload)) {
+                      classNames.forEach((c) => node.classList.add(c));
+                    } else {
+                      classNames.forEach((c) => node.classList.remove(c));
+                    }
                   }
                 });
               }
@@ -2787,25 +1930,35 @@ var DolphinModule = (() => {
             if (node.hasAttribute("data-rt-if")) {
               const key = node.getAttribute("data-rt-if");
               if (key) {
-                node.style.display = evaluateExpression(key, processedPayload) ? "" : "none";
+                if (evaluateExpression(key, processedPayload)) {
+                  node.style.display = "";
+                } else {
+                  node.style.display = "none";
+                }
               }
             }
             if (node.hasAttribute("data-rt-hide")) {
               const key = node.getAttribute("data-rt-hide");
               if (key) {
-                node.style.display = evaluateExpression(key, processedPayload) ? "none" : "";
+                if (evaluateExpression(key, processedPayload)) {
+                  node.style.display = "none";
+                } else {
+                  node.style.display = "";
+                }
               }
             }
           };
           processNode(el);
-          el.querySelectorAll("[data-rt-text],[data-rt-html],[data-rt-attr],[data-rt-class],[data-rt-if],[data-rt-hide]").forEach(processNode);
+          el.querySelectorAll("[data-rt-text], [data-rt-html], [data-rt-attr], [data-rt-class], [data-rt-if], [data-rt-hide]").forEach(processNode);
           return;
         }
         const template = resolveTemplate(el);
         if (template && typeof processedPayload === "object" && processedPayload !== null) {
           if (Array.isArray(processedPayload)) {
             let combinedHTML = "";
-            for (const item of processedPayload) combinedHTML += renderTemplate(template, item);
+            for (const item of processedPayload) {
+              combinedHTML += renderTemplate(template, item);
+            }
             scheduleDOMUpdate(el, combinedHTML);
           } else {
             scheduleDOMUpdate(el, renderTemplate(template, processedPayload));
@@ -2822,61 +1975,76 @@ var DolphinModule = (() => {
         }
       });
     };
-  }
-
-  // src/dom/api-bindings.ts
-  function attachAPIBindings(clientProto) {
-    clientProto._scanAndFetchAPIBinds = async function() {
+    clientProto._resolveModuleGets = async function() {
       if (typeof document === "undefined") return;
-      const elements = document.querySelectorAll("[data-api-get]");
+      
+      // Wait for DOM to be ready
+      if (document.readyState !== 'complete') {
+        await new Promise(resolve => {
+          if (document.readyState === 'complete') {
+            resolve();
+          } else {
+            window.addEventListener('load', resolve);
+          }
+        });
+      }
+      
+      const elements = document.querySelectorAll("[data-module-get]");
+      if (elements.length === 0) return;
+      
       for (const el of Array.from(elements)) {
-        const path = el.getAttribute("data-api-get");
-        if (!path) continue;
-        if (typeof el.hasAttribute === "function" && el.hasAttribute("data-api-initialized")) continue;
-        if (typeof el.setAttribute === "function") {
-          el.setAttribute("data-api-initialized", "true");
+        const modulePath = el.getAttribute("data-module-get");
+        if (!modulePath) continue;
+        
+        // Resolve path relative to the current document URL
+        let resolvedPath = modulePath;
+        if (!modulePath.startsWith('http://') && !modulePath.startsWith('https://') && !modulePath.startsWith('/')) {
+          const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+          resolvedPath = baseUrl + modulePath;
         }
+        
         try {
-          const result = await this.api.get(path);
-          const apiStore = el.getAttribute("data-api-store");
-          if (apiStore) {
-            const parts = apiStore.split(".");
-            if (parts.length === 2) {
-              this.setStoreState(parts[0], parts[1], result);
-            }
+          // Dynamic import the module
+          const module = await import(resolvedPath);
+          
+          // Get the bind topic from data-rt-bind attribute
+          const bindTopic = el.getAttribute("data-rt-bind");
+          if (!bindTopic) {
+            console.warn(`[Dolphin Module Warning]: data-rt-bind attribute missing for data-module-get="${modulePath}"`);
+            continue;
           }
-          const rtBind = el.getAttribute("data-rt-bind");
-          if (rtBind && !apiStore) {
-            this._updateDOM(rtBind, result);
-          } else if (!apiStore) {
-            const template = resolveTemplate(el);
-            if (template && typeof result === "object" && result !== null) {
-              const processedResult = this._applyDeclarativeDirectives(el, result);
-              if (Array.isArray(processedResult)) {
-                let combinedHTML = "";
-                for (const item of processedResult) combinedHTML += renderTemplate(template, item);
-                scheduleDOMUpdate(el, combinedHTML);
-              } else {
-                scheduleDOMUpdate(el, renderTemplate(template, processedResult));
-              }
+          
+          // Find the default export or named exports
+          let moduleData = null;
+          if (module.default) {
+            moduleData = module.default;
+          } else {
+            // Try to find a named export that matches the bind topic
+            if (module[bindTopic]) {
+              moduleData = module[bindTopic];
             } else {
-              if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
-                el.value = typeof result === "object" ? result.value !== void 0 ? result.value : "" : result;
-              } else {
-                const rawHTML = typeof result === "object" ? result.html || result.text || JSON.stringify(result) : String(result);
-                el.innerHTML = sanitizeHTML(rawHTML);
+              // If no matching export, use the first named export
+              const exportKeys = Object.keys(module);
+              if (exportKeys.length > 0) {
+                moduleData = module[exportKeys[0]];
               }
             }
           }
-        } catch (e) {
-          if (this.options?.debug) console.error("[Dolphin] API Get Error:", e);
+          
+          if (moduleData !== null) {
+            // Directly call _updateDOM instead of using pub/sub
+            this._updateDOM(bindTopic, moduleData);
+            if (this.options.debug) {
+              console.log(`%c📦 [Dolphin Module Loaded]:`, "color: #8b5cf6; font-weight: bold;", modulePath, "->", bindTopic, moduleData);
+            }
+          } else {
+            console.warn(`[Dolphin Module Warning]: No export found in module "${modulePath}"`);
+          }
+        } catch (err) {
+          console.error(`[Dolphin Module Error]: Failed to load module "${modulePath}" (resolved: ${resolvedPath}):`, err);
         }
       }
     };
-  }
-
-  // src/dom/imports.ts
-  function attachImports(clientProto, componentPromiseCache) {
     clientProto._resolveImports = async function(container) {
       if (typeof document === "undefined") return;
       const root = container || document.body || document;
@@ -2893,10 +2061,8 @@ var DolphinModule = (() => {
         }
         resolvingSet.add(src);
         const hashIndex = src.indexOf("#");
-        const rawUrl = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
+        const url = hashIndex !== -1 ? src.substring(0, hashIndex) : src;
         const selector = hashIndex !== -1 ? src.substring(hashIndex) : null;
-        const baseURI = typeof document !== "undefined" && document.baseURI ? document.baseURI : typeof window !== "undefined" ? window.location.origin + "/" : "/";
-        const url = rawUrl ? new URL(rawUrl, baseURI).href : baseURI;
         let promise = componentPromiseCache.get(url);
         if (!promise) {
           promise = fetch(url).then((res) => {
@@ -2924,8 +2090,7 @@ var DolphinModule = (() => {
           console.error(`[Dolphin Component Error]: Failed to fetch component "${url}":`, err);
           content = `<span style="color:red;font-weight:bold;">Failed to import ${url}</span>`;
         }
-        el.innerHTML = content;
-        executeScripts(el);
+        el.innerHTML = sanitizeHTML(content);
         el.removeAttribute("data-import");
         const nestedElements = el.querySelectorAll("[data-import]");
         if (nestedElements.length > 0) {
@@ -2937,17 +2102,15 @@ var DolphinModule = (() => {
       };
       const promises = Array.from(elements).map((el) => resolveNode(el, /* @__PURE__ */ new Set()));
       await Promise.all(promises);
+      
+      // After imports complete, resolve module gets
+      await this._resolveModuleGets();
     };
-  }
-
-  // src/dom/router.ts
-  function attachRouter(clientProto) {
     clientProto._initSPARouter = function() {
       if (typeof window === "undefined" || typeof document === "undefined") return;
       if (this._routerInitialized) return;
       this._routerInitialized = true;
       let _spaAbortController = null;
-      const routerMode = this.options.routerMode || "hash";
       const findViewport = () => {
         const selector = this.options.routerViewport || "main, #viewport, body";
         const selectors = selector.split(",").map((s) => s.trim());
@@ -2957,166 +2120,273 @@ var DolphinModule = (() => {
         }
         return document.body;
       };
-      const applyPage = async (html, pushUrlOrHash, pushState = true) => {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-        if (doc.title) document.title = doc.title;
-        const newViewport = doc.querySelector(this.options.routerViewport || "main, #viewport, body");
-        const currentViewport = findViewport();
-        if (newViewport && currentViewport) {
-          currentViewport.innerHTML = newViewport.innerHTML;
-          Array.from(newViewport.attributes).forEach((attr) => {
-            currentViewport.setAttribute(attr.name, attr.value);
-          });
-        } else if (currentViewport) {
-          currentViewport.innerHTML = doc.body.innerHTML;
-        }
-        if (pushState && pushUrlOrHash) {
-          if (routerMode === "hash") {
-            const newHash = pushUrlOrHash.startsWith("#") ? pushUrlOrHash : "#" + pushUrlOrHash;
-            if (window.location.hash !== newHash) {
-              window.history.pushState({ dolphinSpa: true, hash: newHash }, "", newHash);
-            }
-          } else {
-            window.history.pushState({ dolphinSpa: true, url: pushUrlOrHash }, "", pushUrlOrHash);
-          }
-        }
-        if (this.options.routerTransitions && currentViewport) {
-          currentViewport.classList.remove("dolphin-fade-out");
-          currentViewport.classList.add("dolphin-fade-in");
-          setTimeout(() => currentViewport.classList.remove("dolphin-fade-in"), 300);
-        }
-        await this._resolveImports(currentViewport);
-        executeScripts(currentViewport);
-        if (this.uiStores && this.uiStores.has("errors")) {
-          const errStore = this.uiStores.get("errors");
-          if (errStore) {
-            for (const key in errStore) {
-              this.setStoreState("errors", key, null);
-            }
-          }
-        }
-        this._scanStoreBinds();
-        this._scanAndFetchAPIBinds();
-        this._scanVFSBinds();
-      };
-      const loadPage = async (rawUrl, pushState = true) => {
+      const loadPage = async (url, pushState = true) => {
         try {
-          if (this.options.debug) {
-            console.log(`%c\u{1F6E3}\uFE0F [Dolphin Router]: Navigating to ${rawUrl}...`, "color: #3b82f6; font-weight: bold;");
+          console.log(`%c🚀 [Dolphin Router] Loading: ${url}`, "color: #3b82f6; font-weight: bold;");
+          
+          if (_spaAbortController) {
+            _spaAbortController.abort();
           }
-          if (_spaAbortController) _spaAbortController.abort();
           _spaAbortController = new AbortController();
           const signal = _spaAbortController.signal;
-          const baseURI = document.baseURI || window.location.origin + "/";
-          const absoluteUrl = new URL(rawUrl, baseURI).href;
           const viewport = findViewport();
+          console.log('[Dolphin Router] Current viewport:', viewport);
+          
           if (this.options.routerTransitions && viewport) {
             viewport.classList.add("dolphin-fade-out");
             await new Promise((r) => setTimeout(r, 150));
           }
-          const response = await fetch(absoluteUrl, { signal });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const html = await response.text();
+          
+          let html;
+          let pathname;
+          
+          // Handle hash-based routing
+          if (url.startsWith('#')) {
+            pathname = url; // Keep the # for matching
+            console.log('[Dolphin Router] Hash-based route:', pathname);
+          } else {
+            pathname = new URL(url, window.location.href).pathname;
+            console.log('[Dolphin Router] Path-based route:', pathname);
+          }
+          
+          // Check if DOLPHIN_ROUTES is defined for local file routing
+          let routes = window.DOLPHIN_ROUTES;
+          console.log('[Dolphin Router] Available routes:', routes);
+          
+          // If DOLPHIN_ROUTES is a string, load it from a file
+          if (typeof routes === 'string') {
+            try {
+              console.log('[Dolphin Router] Loading routes from:', routes);
+              const routesResponse = await fetch(routes, { signal });
+              if (routesResponse.ok) {
+                const routesText = await routesResponse.text();
+                console.log('[Dolphin Router] Routes content:', routesText);
+                // Parse the routes file (could be JSON or JS)
+                if (routesText.trim().startsWith('{')) {
+                  routes = JSON.parse(routesText);
+                } else {
+                  // Execute as JS module - convert to absolute URL for import
+                  const absoluteUrl = new URL(routes, window.location.href).href;
+                  const module = await import(absoluteUrl);
+                  routes = module.default || module.route || module.routes || module;
+                }
+                window.DOLPHIN_ROUTES = routes; // Cache the loaded routes
+                console.log('[Dolphin Router] Parsed routes:', routes);
+              }
+            } catch (err) {
+              console.warn('[Dolphin Router] Failed to load routes file:', err);
+            }
+          }
+          
+          if (routes && routes[pathname]) {
+            const localPath = routes[pathname];
+            console.log('[Dolphin Router] Found route for:', pathname, '->', localPath);
+            const response = await fetch(localPath, { signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            html = await response.text();
+            console.log('[Dolphin Router] Loaded HTML content length:', html.length);
+          } else {
+            console.log('[Dolphin Router] No route found for:', pathname);
+            // Check if 404 page exists in routes
+            if (routes && routes['/404']) {
+              const localPath = routes['/404'];
+              const response = await fetch(localPath, { signal });
+              if (response.ok) {
+                html = await response.text();
+              } else {
+                // Default HTTP fetch behavior
+                const response = await fetch(url, { signal });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                html = await response.text();
+              }
+            } else {
+              // Default HTTP fetch behavior
+              const response = await fetch(url, { signal });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              html = await response.text();
+            }
+          }
+          
           _spaAbortController = null;
-          await applyPage(html, rawUrl, pushState);
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+          if (doc.title) {
+            document.title = doc.title;
+          }
+          const newViewport = doc.querySelector(this.options.routerViewport || "main, #viewport, body");
+          const currentViewport = findViewport();
+          if (newViewport && currentViewport) {
+            // Only replace the viewport content, not the entire page
+            currentViewport.innerHTML = newViewport.innerHTML;
+            Array.from(newViewport.attributes).forEach((attr) => {
+              currentViewport.setAttribute(attr.name, attr.value);
+            });
+          } else if (currentViewport) {
+            // Fallback: only use body content, not entire document
+            currentViewport.innerHTML = doc.body.innerHTML;
+          }
+          if (pushState) {
+            window.history.pushState({ dolphinSpa: true, url }, "", url);
+          }
+          if (this.options.routerTransitions && currentViewport) {
+            currentViewport.classList.remove("dolphin-fade-out");
+            currentViewport.classList.add("dolphin-fade-in");
+            setTimeout(() => currentViewport.classList.remove("dolphin-fade-in"), 300);
+          }
+          
+          // Update active link highlighting
+          const spaLinks = document.querySelectorAll('[data-spa]');
+          
+          spaLinks.forEach(link => {
+            link.classList.remove('active');
+            const linkHref = link.getAttribute('href');
+            if (linkHref === pathname) {
+              link.classList.add('active');
+            }
+          });
+          
+          await this._resolveImports(currentViewport);
+          this._scanStoreBinds();
+          this._scanAndFetchAPIBinds();
         } catch (err) {
           if (err && err.name === "AbortError") return;
           console.error("[Dolphin Router Error]: Failed to route page:", err);
-          window.location.href = rawUrl;
+          window.location.href = url;
         }
       };
-      if (routerMode === "hash") {
-        const getHashPath = () => {
-          const hash = window.location.hash;
-          if (!hash || hash === "#" || hash === "#/") return "";
-          return hash.slice(1);
-        };
-        const loadHashPage = async (path) => {
-          if (!path || path === "/") return;
-          if (this.options.debug) {
-            console.log(`%c\u{1F6E3}\uFE0F [Dolphin Hash Router]: Loading ${path}`, "color: #3b82f6; font-weight: bold;");
-          }
-          const bare = path.endsWith("/") ? path.slice(0, -1) : path;
-          const candidates = [];
-          if (!bare.endsWith(".html")) {
-            candidates.push(bare + ".html");
-            candidates.push(bare + "/index.html");
-          }
-          candidates.push(bare);
-          if (_spaAbortController) _spaAbortController.abort();
-          _spaAbortController = new AbortController();
-          const signal = _spaAbortController.signal;
-          const baseURI = document.baseURI || window.location.origin + "/";
-          let html = null;
-          for (const candidate of candidates) {
+      this.addDomListener(document, "click", (e) => {
+        const anchor = e.target.closest("a");
+        console.log('[Dolphin Router] Click detected, anchor:', anchor);
+        if (!anchor) return;
+        if (!anchor.hasAttribute("data-spa") && anchor.getAttribute("data-spa") !== "true") {
+          console.log('[Dolphin Router] No data-spa attribute');
+          return;
+        }
+        const href = anchor.getAttribute("href");
+        console.log('[Dolphin Router] Click href:', href);
+        if (!href || href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+        const url = new URL(href, window.location.href);
+        if (url.origin !== window.location.origin) return;
+        e.preventDefault();
+        console.log('[Dolphin Router] Calling loadPage with:', href);
+        loadPage(href);
+      });
+      this.addDomListener(window, "popstate", (e) => {
+        console.log('[Dolphin Router] Popstate event, state:', e.state);
+        if (e.state && e.state.dolphinSpa) {
+          console.log('[Dolphin Router] Loading from popstate:', e.state.url);
+          loadPage(e.state.url, false);
+        } else if (e.state === null) {
+          console.log('[Dolphin Router] Null state, loading pathname:', window.location.pathname);
+          loadPage(window.location.pathname, false);
+        }
+      });
+      
+      // Handle hash changes for hash-based routing
+      this.addDomListener(window, "hashchange", () => {
+        const hash = window.location.hash;
+        console.log('[Dolphin Router] Hashchange event, hash:', hash);
+        if (hash) {
+          loadPage(hash, false);
+        }
+      });
+      
+      // Handle initial route on page load
+      const handleInitialRoute = async () => {
+        let initialPath;
+        
+        // Check for hash-based routing first
+        if (window.location.hash) {
+          initialPath = window.location.hash; // Use hash
+          console.log('[Dolphin Router] Initial hash route:', initialPath);
+        } else {
+          console.log('[Dolphin Router] No hash found, checking routes format');
+          // If no hash, check if routes use hash format
+          let routes = window.DOLPHIN_ROUTES;
+          console.log('[Dolphin Router] Routes before loading:', routes);
+          
+          // Load routes if it's a string
+          if (typeof routes === 'string') {
             try {
-              const absoluteUrl = new URL(candidate, baseURI).href;
-              const res = await fetch(absoluteUrl, { signal });
-              if (res.ok) {
-                html = await res.text();
-                break;
+              console.log('[Dolphin Router] Loading routes from file...');
+              const routesResponse = await fetch(routes);
+              if (routesResponse.ok) {
+                const routesText = await routesResponse.text();
+                if (routesText.trim().startsWith('{')) {
+                  routes = JSON.parse(routesText);
+                } else {
+                  const absoluteUrl = new URL(routes, window.location.href).href;
+                  const module = await import(absoluteUrl);
+                  routes = module.default || module.route || module.routes || module;
+                }
+                window.DOLPHIN_ROUTES = routes;
+                console.log('[Dolphin Router] Routes loaded:', routes);
               }
             } catch (err) {
-              if (err && err.name === "AbortError") return;
+              console.warn('[Dolphin Router] Failed to load routes for initial route:', err);
             }
           }
-          _spaAbortController = null;
-          if (html !== null) {
-            const viewport = findViewport();
-            if (this.options.routerTransitions && viewport) {
-              viewport.classList.add("dolphin-fade-out");
-              await new Promise((r) => setTimeout(r, 150));
+          
+          // Check if routes use hash format
+          if (routes && Object.keys(routes).some(key => key.startsWith('#'))) {
+            console.log('[Dolphin Router] Routes use hash format, redirecting');
+            // Routes use hash format, so redirect to hash
+            const pathname = window.location.pathname;
+            const hashRoute = '#' + pathname;
+            console.log('[Dolphin Router] Pathname:', pathname, 'Hash route:', hashRoute);
+            if (routes[hashRoute]) {
+              console.log('[Dolphin Router] Redirecting to:', hashRoute);
+              window.location.hash = hashRoute;
+              return; // Let hashchange handle it
+            } else {
+              console.log('[Dolphin Router] Hash route not found, redirecting to home');
+              window.location.hash = '#/';
+              return;
             }
-            await applyPage(html, void 0, false);
           } else {
-            console.warn(`[Dolphin Hash Router]: No page found for hash path "${path}"`);
+            console.log('[Dolphin Router] Routes use path format');
+            initialPath = window.location.pathname; // Use pathname
           }
-        };
-        const initialPath = getHashPath();
-        if (initialPath) {
-          loadHashPage(initialPath);
         }
-        this.addDomListener(window, "hashchange", () => {
-          loadHashPage(getHashPath());
-        });
-        this.addDomListener(document, "click", (e) => {
-          const anchor = e.target.closest("a");
-          if (!anchor) return;
-          if (!anchor.hasAttribute("data-spa")) return;
-          const href = anchor.getAttribute("href");
-          if (!href || href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
-          if (href.startsWith("#")) return;
+        
+        let routes = window.DOLPHIN_ROUTES;
+        
+        // Load routes if it's a string (in case not loaded above)
+        if (typeof routes === 'string') {
           try {
-            const parsed = new URL(href, window.location.href);
-            if (parsed.origin !== window.location.origin) return;
-          } catch {
-            return;
+            const routesResponse = await fetch(routes);
+            if (routesResponse.ok) {
+              const routesText = await routesResponse.text();
+              if (routesText.trim().startsWith('{')) {
+                routes = JSON.parse(routesText);
+              } else {
+                const absoluteUrl = new URL(routes, window.location.href).href;
+                const module = await import(absoluteUrl);
+                routes = module.default || module.route || module.routes || module;
+              }
+              window.DOLPHIN_ROUTES = routes;
+            }
+          } catch (err) {
+            console.warn('[Dolphin Router] Failed to load routes for initial route:', err);
           }
-          e.preventDefault();
-          const hashTarget = href.startsWith("/") ? "#" + href : "#/" + href;
-          window.location.hash = hashTarget;
-        });
-      } else {
-        this.addDomListener(document, "click", (e) => {
-          const anchor = e.target.closest("a");
-          if (!anchor) return;
-          if (!anchor.hasAttribute("data-spa") && anchor.getAttribute("data-spa") !== "true") return;
-          const href = anchor.getAttribute("href");
-          if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
-          const url = new URL(href, window.location.href);
-          if (url.origin !== window.location.origin) return;
-          e.preventDefault();
-          loadPage(href);
-        });
-        this.addDomListener(window, "popstate", (e) => {
-          if (e.state && e.state.dolphinSpa) {
-            loadPage(e.state.url, false);
-          } else if (e.state === null) {
-            loadPage(window.location.pathname, false);
-          }
-        });
-      }
+        }
+        
+        // Check if current path needs routing
+        if (routes && routes[initialPath]) {
+          console.log('[Dolphin Router] Loading initial route:', initialPath);
+          await loadPage(initialPath, false);
+        } else if (routes && routes['/404'] && initialPath !== '/' && initialPath !== '#/') {
+          // Show 404 page if route not found
+          await loadPage('/404', false);
+        } else if (initialPath !== '/' && initialPath !== '#/') {
+          // Redirect to home if route not found
+          window.location.hash = '#/';
+        }
+      };
+      
+      // Execute initial route handling
+      console.log('[Dolphin Router] Executing initial route handler');
+      handleInitialRoute();
       if (this.options.routerTransitions) {
         const style = document.createElement("style");
         style.innerHTML = `
@@ -3133,226 +2403,6 @@ var DolphinModule = (() => {
             `;
         document.head.appendChild(style);
       }
-    };
-  }
-
-  // src/dom/index.ts
-  function attachDOMBinding(clientProto) {
-    clientProto._scanVFSBinds = function() {
-      scanVFSBinds(this);
-    };
-    const componentPromiseCache = /* @__PURE__ */ new Map();
-    attachStoreBindings(clientProto);
-    attachRTBindings(clientProto);
-    attachAPIBindings(clientProto);
-    attachImports(clientProto, componentPromiseCache);
-    attachRouter(clientProto);
-    clientProto._initDOMBinding = function() {
-      if (typeof window !== "undefined") {
-        const win = window;
-        if (win.__dolphin_active_client && win.__dolphin_active_client !== this) {
-          try {
-            win.__dolphin_active_client.cleanupDomListeners();
-            win.__dolphin_active_client._domInitialized = false;
-          } catch (e) {
-            console.warn("[Dolphin] Failed to clean up old client DOM listeners:", e);
-          }
-        }
-        win.__dolphin_active_client = this;
-      }
-      if (this._domInitialized) return;
-      this._domInitialized = true;
-      const PUSH_EVENTS = ["input", "change", "keyup", "paste", "blur"];
-      const debounceTimers = /* @__PURE__ */ new WeakMap();
-      PUSH_EVENTS.forEach((evtName) => {
-        this.addDomListener(document, evtName, (e) => {
-          if (!e.target || !e.target.getAttribute) return;
-          const writeBind = e.target.getAttribute("data-store-write");
-          if (writeBind) {
-            const parts = writeBind.split(".");
-            if (parts.length === 2) {
-              const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-              this.setStoreState(parts[0], parts[1], val, e.target);
-            }
-          }
-          const rules = e.target.getAttribute("data-rt-validate");
-          const name = e.target.name;
-          if (rules && name && typeof this.validateField === "function") {
-            const form = e.target.closest("form");
-            const formValues = form ? Object.fromEntries(new FormData(form).entries()) : {};
-            const errorMsg = this.validateField(e.target.value, rules, formValues);
-            if (errorMsg) {
-              e.target.classList.add("invalid");
-              this.publish(`errors/${name}`, errorMsg);
-            } else {
-              e.target.classList.remove("invalid");
-              this.publish(`errors/${name}`, "");
-            }
-          }
-          const topic = e.target.getAttribute("data-rt-push");
-          if (topic) {
-            const debounceVal = e.target.getAttribute("data-rt-debounce");
-            const waitMs = debounceVal ? parseInt(debounceVal, 10) : 0;
-            const triggerPush = () => {
-              const payload = { name: e.target.name, value: e.target.value, deviceId: this.deviceId };
-              this.pubPush(topic, payload);
-            };
-            if (waitMs > 0) {
-              if (debounceTimers.has(e.target)) clearTimeout(debounceTimers.get(e.target));
-              debounceTimers.set(e.target, setTimeout(triggerPush, waitMs));
-            } else {
-              triggerPush();
-            }
-          }
-        });
-      });
-      this.addDomListener(document, "submit", async (e) => {
-        if (!e.target || !e.target.getAttribute) return;
-        const rtTopic = e.target.getAttribute("data-rt-submit");
-        const apiTarget = e.target.getAttribute("data-api-submit");
-        if (rtTopic || apiTarget) {
-          const formInputs = e.target.querySelectorAll("[name]");
-          formInputs.forEach((inputEl) => {
-            if (inputEl.name) {
-              this.publish(`errors/${inputEl.name}`, "");
-              inputEl.classList.remove("invalid");
-            }
-          });
-          const validatedInputs = e.target.querySelectorAll("[data-rt-validate]");
-          let formIsValid = true;
-          if (validatedInputs.length > 0 && typeof this.validateField === "function") {
-            const formValues = Object.fromEntries(new FormData(e.target).entries());
-            validatedInputs.forEach((inputEl) => {
-              const rules = inputEl.getAttribute("data-rt-validate");
-              const name = inputEl.name;
-              if (rules && name) {
-                const errorMsg = this.validateField(inputEl.value, rules, formValues);
-                if (errorMsg) {
-                  formIsValid = false;
-                  inputEl.classList.add("invalid");
-                  this.publish(`errors/${name}`, errorMsg);
-                }
-              }
-            });
-          }
-          if (!formIsValid) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-          }
-          e.preventDefault();
-          const parentCtx = this.getClosestContext(e.target) || {};
-          const data = Object.fromEntries(new FormData(e.target).entries());
-          if (rtTopic) {
-            let resolvedTopic = rtTopic;
-            for (const k in parentCtx) {
-              const escapedK = escapeRegExp(k);
-              resolvedTopic = resolvedTopic.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] ?? "");
-            }
-            this.publish(resolvedTopic, data);
-          } else if (apiTarget) {
-            let resolvedTarget = apiTarget;
-            for (const k in parentCtx) {
-              const escapedK = escapeRegExp(k);
-              resolvedTarget = resolvedTarget.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] ?? "");
-            }
-            const parts = resolvedTarget.trim().split(" ");
-            let method = parts.length > 1 ? parts[0].toUpperCase() : "POST";
-            const path = parts.length > 1 ? parts[1] : parts[0];
-            if (data._method) method = String(data._method).toUpperCase();
-            try {
-              const result = await this.api.request(method, path, data);
-              const resultBind = e.target.getAttribute("data-api-result");
-              if (resultBind) this._updateDOM(resultBind, result);
-              const redirect = e.target.getAttribute("data-api-redirect");
-              if (redirect) window.location.href = redirect;
-              if (e.target.hasAttribute("data-api-reload")) window.location.reload();
-            } catch (err) {
-              console.error("[Dolphin] API Submit Error:", err);
-            }
-          }
-        }
-      });
-      const INTERACTION_EVENTS = ["click", "change", "input", "keydown", "keyup", "dblclick", "focus", "blur", "mouseenter", "mouseleave"];
-      INTERACTION_EVENTS.forEach((evtName) => {
-        this.addDomListener(document, evtName, async (e) => {
-          if (!e.target || !e.target.closest) return;
-          const rtBtn = e.target.closest(`[data-rt-${evtName}]`);
-          const apiBtn = e.target.closest(`[data-api-${evtName}]`);
-          if (rtBtn) {
-            if (evtName === "submit") e.preventDefault();
-            const topic = rtBtn.getAttribute(`data-rt-${evtName}`);
-            const actionData = rtBtn.getAttribute("data-rt-payload");
-            const parentCtx = this.getClosestContext(rtBtn) || {};
-            let payload = {};
-            if (actionData) {
-              let resolvedDataStr = actionData;
-              for (const k in parentCtx) {
-                const escapedK = escapeRegExp(k);
-                resolvedDataStr = resolvedDataStr.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] ?? "");
-              }
-              try {
-                payload = JSON.parse(resolvedDataStr);
-              } catch {
-                payload = {};
-              }
-            }
-            this.publish(topic, payload);
-          }
-          if (apiBtn) {
-            if (evtName === "submit") e.preventDefault();
-            const apiTarget = apiBtn.getAttribute(`data-api-${evtName}`);
-            const actionData = apiBtn.getAttribute("data-api-payload");
-            const parentCtx = this.getClosestContext(apiBtn) || {};
-            const parts = apiTarget.trim().split(" ");
-            const method = parts.length > 1 ? parts[0].toUpperCase() : "POST";
-            const path = parts.length > 1 ? parts[1] : parts[0];
-            let p2payload = null;
-            if (actionData) {
-              let resolvedDataStr = actionData;
-              for (const k in parentCtx) {
-                const escapedK = escapeRegExp(k);
-                resolvedDataStr = resolvedDataStr.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), parentCtx[k] ?? "");
-              }
-              try {
-                p2payload = JSON.parse(resolvedDataStr);
-              } catch {
-                p2payload = null;
-              }
-            }
-            try {
-              const result = await this.api.request(method, path, p2payload);
-              const resultBind = apiBtn.getAttribute("data-api-result");
-              if (resultBind) this._updateDOM(resultBind, result);
-              const redirect = apiBtn.getAttribute("data-api-redirect");
-              if (redirect) window.location.href = redirect;
-              if (apiBtn.hasAttribute("data-api-reload")) window.location.reload();
-            } catch (err) {
-              console.error(`[Dolphin] API ${evtName} Error:`, err);
-            }
-          }
-          const storeActionBtn = e.target.closest(`[data-store-${evtName}]`);
-          if (storeActionBtn) {
-            if (evtName === "submit") e.preventDefault();
-            const expr = storeActionBtn.getAttribute(`data-store-${evtName}`);
-            if (expr) this._executeStoreAction(expr, storeActionBtn);
-          }
-        });
-      });
-      this.subscribe("#", (payload, topic) => {
-        this._updateDOM(topic, payload);
-      });
-      this.subscribe("errors/#", (payload, topic) => {
-        const field = topic.split("/").slice(1).join("/");
-        if (field && typeof this.setStoreState === "function") {
-          this.setStoreState("errors", field, payload);
-        }
-      });
-      this._scanAndFetchAPIBinds();
-      this._scanStoreBinds();
-      this._scanVFSBinds();
-      this._resolveImports();
-      this._initSPARouter();
     };
   }
 
@@ -3506,9 +2556,7 @@ var DolphinModule = (() => {
     async syncMutations() {
       const mutations = await this.getMutations();
       if (mutations.length === 0) return;
-      if (this.client.options?.debug) {
-        console.log(`[Dolphin Offline] Syncing ${mutations.length} queued mutations...`);
-      }
+      console.log(`[Dolphin Offline] Syncing ${mutations.length} queued mutations...`);
       for (const mutation of mutations) {
         try {
           await this.client.api.requestDirect(mutation.method, mutation.path, mutation.payload);
@@ -3738,9 +2786,9 @@ var DolphinModule = (() => {
         if (paramsAttr) {
           try {
             const params = JSON.parse(paramsAttr);
-            const escapeRegExp3 = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             for (const k in params) {
-              const escapedK = escapeRegExp3(k);
+              const escapedK = escapeRegExp(k);
               translation = translation.replace(new RegExp(`\\{\\{${escapedK}\\}\\}`, "g"), params[k]);
             }
           } catch {
@@ -4009,32 +3057,6 @@ var DolphinModule = (() => {
   }
 
   // src/testing.ts
-  function createMockFn() {
-    if (typeof jest !== "undefined" && typeof jest.fn === "function") {
-      return jest.fn();
-    }
-    const fn = (...args) => {
-      fn.mock.calls.push(args);
-      if (fn._implementation) {
-        return fn._implementation(...args);
-      }
-      return fn._returnValue;
-    };
-    fn.mock = {
-      calls: []
-    };
-    fn._returnValue = void 0;
-    fn._implementation = null;
-    fn.mockReturnValue = (val) => {
-      fn._returnValue = val;
-      return fn;
-    };
-    fn.mockImplementation = (impl) => {
-      fn._implementation = impl;
-      return fn;
-    };
-    return fn;
-  }
   var DolphinTestUtils = class {
     static render(html) {
       if (typeof document === "undefined") {
@@ -4061,11 +3083,11 @@ var DolphinModule = (() => {
         send: (data) => {
           sentMessages.push(data);
         },
-        close: createMockFn(),
-        onopen: createMockFn(),
-        onmessage: createMockFn(),
-        onclose: createMockFn(),
-        onerror: createMockFn(),
+        close: jest.fn(),
+        onopen: jest.fn(),
+        onmessage: jest.fn(),
+        onclose: jest.fn(),
+        onerror: jest.fn(),
         sentMessages
       };
       global.WebSocket = class {
@@ -4100,8 +3122,8 @@ var DolphinModule = (() => {
     static simulateClick(el) {
       const clickEvt = {
         target: el,
-        preventDefault: createMockFn(),
-        stopPropagation: createMockFn()
+        preventDefault: jest.fn(),
+        stopPropagation: jest.fn()
       };
       const clickListeners = global.document._listeners?.["click"] || [];
       clickListeners.forEach((listener) => listener(clickEvt));
@@ -4110,8 +3132,8 @@ var DolphinModule = (() => {
       el.value = value;
       const changeEvt = {
         target: el,
-        preventDefault: createMockFn(),
-        stopPropagation: createMockFn()
+        preventDefault: jest.fn(),
+        stopPropagation: jest.fn()
       };
       const changeListeners = global.document._listeners?.["change"] || [];
       changeListeners.forEach((listener) => listener(changeEvt));
@@ -4132,46 +3154,22 @@ var DolphinModule = (() => {
   attachCollab(DolphinClient.prototype);
   attachPwa(DolphinClient.prototype);
   attachTesting(DolphinClient.prototype);
-  var $ = (selector, parent = document) => {
-    return parent.querySelector(selector);
-  };
-  var $$ = (selector, parent = document) => {
-    return Array.from(parent.querySelectorAll(selector));
-  };
-  var on = (selector, event, callback) => {
-    const elements = typeof selector === "string" ? $$(selector) : [selector];
-    elements.forEach((el) => el.addEventListener(event, callback));
-  };
-  var dolphinElement = $;
-  var dolphinQuery = on;
-  DolphinClient.prototype.$ = $;
-  DolphinClient.prototype.$$ = $$;
-  DolphinClient.prototype.on = on;
-  DolphinClient.prototype.dolphinElement = dolphinElement;
-  DolphinClient.prototype.dolphinQuery = dolphinQuery;
   if (typeof window !== "undefined") {
     window.DolphinClient = DolphinClient;
-    if (!window.$) window.$ = $;
-    if (!window.$$) window.$$ = $$;
-    if (!window.on) window.on = on;
-    window.dolphinElement = dolphinElement;
-    window.dolphinQuery = dolphinQuery;
     document.addEventListener("DOMContentLoaded", () => {
-      setTimeout(() => {
-        if (!window.dolphin) {
-          const scriptEl = document.querySelector('script[src*="dolphin-client"]');
-          const debugMode = scriptEl ? scriptEl.getAttribute("data-debug") === "true" : false;
-          const dolphin = new DolphinClient(void 0, void 0, { debug: debugMode });
-          window.dolphin = dolphin;
-          if (debugMode) {
-            console.log("%c\u{1F42C} [Dolphin Client] Auto-initialized local reactive engine!", "color: #06b6d4; font-weight: bold; font-size: 14px;");
-            console.log('%c\u{1F449} Tip: You can access the client instance via "window.dolphin" in console.', "color: #94a3b8; font-style: italic;");
-          }
-          if (document.querySelector('[data-store-write="app.username"]')) {
-            dolphin.setStoreState("app", "username", "\u0928\u092E\u0938\u094D\u0924\u0947 \u0938\u093E\u0925\u0940!");
-          }
+      if (!window.dolphin) {
+        const scriptEl = document.querySelector('script[src*="dolphin-client"]');
+        const debugMode = scriptEl ? scriptEl.getAttribute("data-debug") === "true" : false;
+        const dolphin = new DolphinClient(void 0, void 0, { debug: debugMode });
+        window.dolphin = dolphin;
+        if (debugMode) {
+          console.log("%c\u{1F42C} [Dolphin Client] Auto-initialized local reactive engine!", "color: #06b6d4; font-weight: bold; font-size: 14px;");
+          console.log('%c\u{1F449} Tip: You can access the client instance via "window.dolphin" in console.', "color: #94a3b8; font-style: italic;");
         }
-      }, 0);
+        if (document.querySelector('[data-store-write="app.username"]')) {
+          dolphin.setStoreState("app", "username", "\u0928\u092E\u0938\u094D\u0924\u0947 \u0938\u093E\u0925\u0940!");
+        }
+      }
     });
   }
   return __toCommonJS(index_exports);

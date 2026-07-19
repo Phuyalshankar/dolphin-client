@@ -61,14 +61,12 @@ if (typeof window !== 'undefined') {
   (window as any).dolphinQuery = dolphinQuery;
   
   // Auto-initialize a default client for zero-config plain HTML pages!
-  document.addEventListener('DOMContentLoaded', () => {
+  const initDolphin = () => {
     setTimeout(() => {
       if (!(window as any).dolphin) {
-        // Check if the script tag has data-debug="true"
-        const scriptEl = document.querySelector('script[src*="dolphin-client"]');
-        const debugMode = scriptEl ? scriptEl.getAttribute('data-debug') === 'true' : false;
+        const scriptEl = document.querySelector('script[src*="client"]');
+        const debugMode = scriptEl ? scriptEl.getAttribute('data-debug') === 'true' : true;
 
-        // Read router options from body data attributes
         const body = document.body;
         const routerMode = body ? body.getAttribute('data-router-mode') : null;
         const routerViewport = body ? body.getAttribute('data-router-viewport') : null;
@@ -86,14 +84,15 @@ if (typeof window !== 'undefined') {
           console.log('%c🐬 [Dolphin Client] Auto-initialized local reactive engine!', 'color: #06b6d4; font-weight: bold; font-size: 14px;');
           console.log('%c👉 Tip: You can access the client instance via "window.dolphin" in console.', 'color: #94a3b8; font-style: italic;');
         }
-
-        // Auto-seed default demo state if the demo input is present on the page
-        if (document.querySelector('[data-store-write="app.username"]')) {
-          (dolphin as any).setStoreState('app', 'username', 'नमस्ते साथी!');
-        }
       }
     }, 0);
-  });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDolphin);
+  } else {
+    initDolphin();
+  }
 }
 
 export interface DolphinClientConfig {

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Products Template Debug</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+  
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold mb-8">Products Template Debug 🐬</h1>
+    
+    <!-- Step 1: Initialize Store with Data -->
+    <dolphin-store name="products">
+      {
+        "items": [
+          { "id": 1, "name": "Laptop", "price": 999, "image": "https://picsum.photos/200/200?random=1" },
+          { "id": 2, "name": "Phone", "price": 599, "image": "https://picsum.photos/200/200?random=2" },
+          { "id": 3, "name": "Tablet", "price": 399, "image": "https://picsum.photos/200/200?random=3" },
+          { "id": 4, "name": "Watch", "price": 299, "image": "https://picsum.photos/200/200?random=4" }
+        ]
+      }
+    </dolphin-store>
+    
+    <!-- Debug Info -->
+    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+      <p class="font-bold text-blue-900">Debug Console:</p>
+      <p class="text-sm text-blue-700">Open browser console (F12) to see debug messages</p>
+    </div>
+    
+    <!-- Step 2: Bind to Store and Use Template -->
+    <div 
+      data-rt-bind="store/products" 
+      data-rt-template="#product-card-template"
+      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <!-- Loading placeholder - यो data आएपछि हट्छ -->
+      <div class="col-span-full text-center py-10 text-gray-500">
+        Loading products...
+      </div>
+    </div>
+    
+    <!-- Step 3: Define Template -->
+    <template id="product-card-template">
+      {#each items as product}
+        <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow">
+          <img src="{{product.image}}" alt="{{product.name}}" class="w-full h-48 object-cover">
+          <div class="p-4">
+            <h3 class="font-bold text-lg mb-2">{{product.name}}</h3>
+            <div class="flex items-center justify-between">
+              <span class="text-2xl font-bold text-blue-600">${{product.price}}</span>
+              <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <span class="flex items-center gap-2">
+                  <span class="dolphin-icon-spacer w-4 h-4" data-icon-name="shopping-cart"></span>
+                  Buy
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </template>
+    
+  </div>
+
+  <!-- Dolphin Client -->
+  <script src="./dolphin-client.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🐬 Starting Dolphin Client...');
+      
+      // Initialize Dolphin
+      window.dolphin = new DolphinModule.DolphinClient();
+      
+      // Debug: Check store after initialization
+      setTimeout(() => {
+        console.log('📦 Store State:', window.dolphin.getStoreState('products'));
+        console.log('📝 Template Element:', document.querySelector('#product-card-template'));
+        console.log('🎯 Binding Element:', document.querySelector('[data-rt-bind="store/products"]'));
+        
+        const bindingDiv = document.querySelector('[data-rt-bind="store/products"]');
+        if (bindingDiv) {
+          console.log('✅ Binding div found');
+          console.log('📄 Current HTML:', bindingDiv.innerHTML.substring(0, 200));
+        }
+        
+        // Manual icon hydration
+        manualHydrateIcons();
+      }, 1000);
+      
+      window.dolphin.connect().catch(err => {
+        console.log('✅ Offline mode (no server needed)');
+      });
+    });
+    
+    // Manual icon hydration
+    function manualHydrateIcons() {
+      const spacers = document.querySelectorAll('.dolphin-icon-spacer');
+      console.log(`🎨 Found ${spacers.length} icons to hydrate`);
+      
+      spacers.forEach(async (span) => {
+        const iconName = span.getAttribute('data-icon-name');
+        if (!iconName) return;
+        
+        const classes = (span.getAttribute('class') || '').replace('dolphin-icon-spacer', '').trim();
+        const cacheKey = `dolphin-icon-${iconName}`;
+        
+        const injectClasses = (svgStr) => {
+          if (classes) {
+            if (svgStr.includes('class=')) {
+              return svgStr.replace(/class="([^"]*)"/, `class="$1 ${classes}"`);
+            }
+            return svgStr.replace('<svg', `<svg class="${classes}"`);
+          }
+          return svgStr;
+        };
+        
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            span.outerHTML = injectClasses(cached);
+            return;
+          }
+        } catch (e) {}
+        
+        try {
+          const res = await fetch(`https://unpkg.com/lucide-static/icons/${iconName}.svg`);
+          if (res.ok) {
+            const rawSVG = await res.text();
+            try {
+              localStorage.setItem(cacheKey, rawSVG);
+            } catch (e) {}
+            span.outerHTML = injectClasses(rawSVG);
+            console.log(`✅ Loaded icon: ${iconName}`);
+          }
+        } catch (err) {
+          console.error(`❌ Failed to load icon: ${iconName}`, err);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

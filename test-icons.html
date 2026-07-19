@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dolphin Icons Test - नेपाली</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin: 10px;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+  
+  <div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">
+      🐬 Dolphin Icon System Test
+    </h1>
+
+    <!-- Test 1: Direct Icon Tags in Template -->
+    <div class="card">
+      <h2 class="text-xl font-bold mb-4">Test 1: Template भित्र Direct Icons</h2>
+      
+      <dolphin-store name="app" template="#icon-test-template" 
+        title="Shopping Cart" 
+        price="99.99" 
+        inStock="true">
+      </dolphin-store>
+    </div>
+
+    <!-- Test 2: Icons with Click Events -->
+    <div class="card">
+      <h2 class="text-xl font-bold mb-4">Test 2: Interactive Icons (Click Events)</h2>
+      
+      <dolphin-store name="counter" template="#counter-with-icons" count="0"></dolphin-store>
+    </div>
+
+    <!-- Test 3: Product List with Icons -->
+    <div class="card">
+      <h2 class="text-xl font-bold mb-4">Test 3: Product Cards with Icons</h2>
+      
+      <dolphin-store name="products">
+        {
+          "items": [
+            { "id": 1, "name": "Laptop", "price": 999, "inStock": true },
+            { "id": 2, "name": "Phone", "price": 599, "inStock": false },
+            { "id": 3, "name": "Tablet", "price": 399, "inStock": true }
+          ]
+        }
+      </dolphin-store>
+      
+      <div data-rt-bind="store/products" data-rt-template="#product-list-template"></div>
+    </div>
+
+    <!-- Test 4: All Common Icons -->
+    <div class="card">
+      <h2 class="text-xl font-bold mb-4">Test 4: सबै Common Icons (Direct Spacers Method)</h2>
+      <div class="grid grid-cols-6 gap-4 text-center">
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-blue-600" data-icon-name="home"></span>
+          <p class="text-xs mt-2">Home</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-gray-600" data-icon-name="search"></span>
+          <p class="text-xs mt-2">Search</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-yellow-600" data-icon-name="bell"></span>
+          <p class="text-xs mt-2">Bell</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-green-600" data-icon-name="shopping-cart"></span>
+          <p class="text-xs mt-2">Cart</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-red-600" data-icon-name="heart"></span>
+          <p class="text-xs mt-2">Heart</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-yellow-500" data-icon-name="star"></span>
+          <p class="text-xs mt-2">Star</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-purple-600" data-icon-name="user"></span>
+          <p class="text-xs mt-2">User</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-gray-700" data-icon-name="settings"></span>
+          <p class="text-xs mt-2">Settings</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-blue-500" data-icon-name="mail"></span>
+          <p class="text-xs mt-2">Mail</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-green-500" data-icon-name="phone"></span>
+          <p class="text-xs mt-2">Phone</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-red-500" data-icon-name="trash"></span>
+          <p class="text-xs mt-2">Trash</p>
+        </div>
+        <div>
+          <span class="dolphin-icon-spacer w-8 h-8 mx-auto text-indigo-600" data-icon-name="edit"></span>
+          <p class="text-xs mt-2">Edit</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Template 1: Basic Icons -->
+  <template id="icon-test-template">
+    <div class="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+      <span class="dolphin-icon-spacer w-12 h-12 text-blue-600" data-icon-name="shopping-cart"></span>
+      <div class="flex-1">
+        <h3 class="font-bold text-lg">{{title}}</h3>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="dolphin-icon-spacer w-5 h-5 text-green-600" data-icon-name="dollar-sign"></span>
+          <span class="text-2xl font-bold text-gray-800">${{price}}</span>
+        </div>
+      </div>
+      {#if inStock}
+        <div class="flex items-center gap-2 text-green-600">
+          <span class="dolphin-icon-spacer w-6 h-6" data-icon-name="check-circle"></span>
+          <span class="font-semibold">उपलब्ध छ</span>
+        </div>
+      {:else}
+        <div class="flex items-center gap-2 text-red-600">
+          <span class="dolphin-icon-spacer w-6 h-6" data-icon-name="x-circle"></span>
+          <span class="font-semibold">स्टकमा छैन</span>
+        </div>
+      {/if}
+    </div>
+  </template>
+
+  <!-- Template 2: Interactive Counter -->
+  <template id="counter-with-icons">
+    <div class="flex items-center justify-center gap-6 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
+      <button 
+        data-store-click="counter.count = counter.count - 1" 
+        class="bg-red-500 hover:bg-red-600 text-white p-3 rounded-full transition-all active:scale-95">
+        <span class="dolphin-icon-spacer w-6 h-6" data-icon-name="minus"></span>
+      </button>
+      
+      <div class="text-center">
+        <div class="text-5xl font-bold text-gray-800">{{count}}</div>
+        <p class="text-sm text-gray-600 mt-2">Counter Value</p>
+      </div>
+      
+      <button 
+        data-store-click="counter.count = counter.count + 1" 
+        class="bg-green-500 hover:bg-green-600 text-white p-3 rounded-full transition-all active:scale-95">
+        <span class="dolphin-icon-spacer w-6 h-6" data-icon-name="plus"></span>
+      </button>
+    </div>
+  </template>
+
+  <!-- Template 3: Product List -->
+  <template id="product-list-template">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+      {#each items as product}
+        <div class="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-400 transition-all">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="dolphin-icon-spacer w-5 h-5 text-blue-600" data-icon-name="package"></span>
+              <h3 class="font-bold text-gray-800">{{product.name}}</h3>
+            </div>
+            {#if product.inStock}
+              <span class="dolphin-icon-spacer w-5 h-5 text-green-500" data-icon-name="check-circle"></span>
+            {:else}
+              <span class="dolphin-icon-spacer w-5 h-5 text-red-500" data-icon-name="alert-circle"></span>
+            {/if}
+          </div>
+          
+          <div class="flex items-center gap-2 mb-4">
+            <span class="dolphin-icon-spacer w-4 h-4 text-gray-600" data-icon-name="dollar-sign"></span>
+            <span class="text-xl font-bold text-gray-900">${{product.price}}</span>
+          </div>
+          
+          <div class="flex gap-2">
+            <button class="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-all">
+              <span class="dolphin-icon-spacer w-4 h-4" data-icon-name="shopping-cart"></span>
+              <span>थप्नुहोस्</span>
+            </button>
+            <button class="p-2 border-2 border-gray-300 hover:border-red-400 rounded-lg transition-all">
+              <span class="dolphin-icon-spacer w-5 h-5 text-gray-600 hover:text-red-500" data-icon-name="heart"></span>
+            </button>
+          </div>
+        </div>
+      {/each}
+    </div>
+  </template>
+
+  <!-- Dolphin Client Script -->
+  <script src="./dolphin-client.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🐬 Initializing Dolphin Client...');
+      
+      window.dolphin = new DolphinModule.DolphinClient();
+      
+      window.dolphin.connect().catch(err => {
+        console.log("✅ Offline mode (no server needed for icons test)");
+      });
+      
+      // Wait for templates to render, then check icons
+      setTimeout(() => {
+        console.log('🎨 Checking for icons...');
+        const spacers = document.querySelectorAll('.dolphin-icon-spacer');
+        console.log(`Found ${spacers.length} icon placeholders`);
+        
+        if (spacers.length > 0) {
+          spacers.forEach(spacer => {
+            const iconName = spacer.getAttribute('data-icon-name');
+            console.log(`  - Icon: ${iconName}`);
+          });
+          
+          // NOW manually trigger hydration
+          console.log('🚀 Triggering manual icon hydration...');
+          
+          // Method 1: Try DolphinModule
+          if (typeof DolphinModule !== 'undefined' && typeof DolphinModule.hydrateIcons === 'function') {
+            DolphinModule.hydrateIcons();
+            console.log('✅ Called DolphinModule.hydrateIcons()');
+          }
+          // Method 2: Try window.hydrateIcons
+          else if (typeof window.hydrateIcons === 'function') {
+            window.hydrateIcons();
+            console.log('✅ Called window.hydrateIcons()');
+          }
+          // Method 3: Manual implementation
+          else {
+            console.log('⚠️ hydrateIcons not found, implementing manual hydration...');
+            manualHydrateIcons();
+          }
+        } else {
+          console.log('⚠️ No icon placeholders found');
+        }
+      }, 2000);
+      
+      // Manual hydration fallback
+      function manualHydrateIcons() {
+        const spacers = document.querySelectorAll('.dolphin-icon-spacer');
+        console.log(`🔧 Manually hydrating ${spacers.length} icons...`);
+        
+        spacers.forEach(async (span) => {
+          const iconName = span.getAttribute('data-icon-name');
+          if (!iconName) return;
+          
+          const classes = (span.getAttribute('class') || '').replace('dolphin-icon-spacer', '').trim();
+          const cacheKey = `dolphin-icon-${iconName}`;
+          
+          const injectClasses = (svgStr) => {
+            if (classes) {
+              if (svgStr.includes('class=')) {
+                return svgStr.replace(/class="([^"]*)"/, `class="$1 ${classes}"`);
+              }
+              return svgStr.replace('<svg', `<svg class="${classes}"`);
+            }
+            return svgStr;
+          };
+          
+          // Try localStorage cache first
+          try {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+              span.outerHTML = injectClasses(cached);
+              console.log(`✅ Loaded ${iconName} from cache`);
+              return;
+            }
+          } catch (e) {
+            console.warn('localStorage not available:', e);
+          }
+          
+          // Fetch from CDN
+          try {
+            console.log(`📥 Fetching ${iconName} from CDN...`);
+            const res = await fetch(`https://unpkg.com/lucide-static/icons/${iconName}.svg`);
+            if (res.ok) {
+              const rawSVG = await res.text();
+              try {
+                localStorage.setItem(cacheKey, rawSVG);
+              } catch (e) {}
+              span.outerHTML = injectClasses(rawSVG);
+              console.log(`✅ Loaded ${iconName} from CDN`);
+            } else {
+              console.error(`❌ Failed to fetch ${iconName}: ${res.status}`);
+            }
+          } catch (err) {
+            console.error(`❌ Error fetching ${iconName}:`, err);
+          }
+        });
+      }
+    });
+  </script>
+  
+  <script>
+    // Debug helper
+    window.onerror = function(msg, url, line) {
+      const errDiv = document.createElement('div');
+      errDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#ef4444;color:white;padding:16px;border-radius:8px;z-index:9999;max-width:400px;';
+      errDiv.innerHTML = `<strong>⚠️ Error:</strong><br><code style="font-size:12px;">${msg}</code>`;
+      document.body.appendChild(errDiv);
+    };
+  </script>
+</body>
+</html>

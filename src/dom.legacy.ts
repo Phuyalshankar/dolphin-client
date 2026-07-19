@@ -362,8 +362,8 @@ function resolveTemplate(el: Element): string | null {
         const temp = document.createElement(parentElement.tagName);
         temp.innerHTML = newHTML;
 
-        const childs1 = Array.from(parentElement.childNodes);
-        const childs2 = Array.from(temp.childNodes);
+        const childs1 = Array.from(parentElement.children);
+        const childs2 = Array.from(temp.children);
 
         const len1 = childs1.length;
         const len2 = childs2.length;
@@ -784,7 +784,7 @@ function resolveTemplate(el: Element): string | null {
 
         try {
             const fn = new Function('ctx', `with(ctx) { ${expression} }`);
-            fn(context);
+            fn.call(element, context);
         } catch (err) {
             console.error('%c[Dolphin Store Action Error]:', 'color: #ef4444; font-weight: bold;', err);
             if (element) {
@@ -1065,7 +1065,11 @@ function resolveTemplate(el: Element): string | null {
                 if (apiStore) {
                     const parts = apiStore.split('.');
                     if (parts.length === 2) {
-                        this.setStoreState(parts[0], parts[1], result);
+                        if (Array.isArray(result)) {
+                            this.setStoreState(parts[0], parts[1], result);
+                        } else {
+                            console.warn(`[Dolphin API Binding Warning] Expected array for "${apiStore}" but received:`, result);
+                        }
                     }
                 }
 
@@ -1108,6 +1112,7 @@ function resolveTemplate(el: Element): string | null {
         let processedPayload = payload;
         if (typeof payload === 'object' && payload !== null) {
             const applyFilterSearchSort = (arr: any[]) => {
+                if (!Array.isArray(arr)) return [];
                 let result = [...arr];
 
                 // 1. Declarative Filtering

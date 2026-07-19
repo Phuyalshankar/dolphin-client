@@ -24,11 +24,34 @@ export function attachAPIBindings(clientProto: any) {
             try {
                 const result = await this.api.get(path);
 
+                const storeName = el.getAttribute('name') || el.getAttribute('data-store');
+                if (storeName) {
+                    this.setStoreState(storeName, result);
+
+                    // Background Polling Support (e.g. data-api-poll="5000")
+                    const pollInterval = Number(el.getAttribute('data-api-poll'));
+                    if (!isNaN(pollInterval) && pollInterval > 0 && !(el as any)._pollTimerWired) {
+                        (el as any)._pollTimerWired = true;
+                        setInterval(async () => {
+                            try {
+                                const freshData = await this.api.get(path);
+                                this.setStoreState(storeName, freshData);
+                            } catch {}
+                        }, pollInterval);
+                    }
+
+                    continue;
+                }
+
                 const apiStore = el.getAttribute('data-api-store');
                 if (apiStore) {
                     const parts = apiStore.split('.');
                     if (parts.length === 2) {
-                        this.setStoreState(parts[0], parts[1], result);
+                        if (Array.isArray(result)) {
+                            this.setStoreState(parts[0], parts[1], result);
+                        } else {
+                            console.warn(`[Dolphin API Binding Warning] Expected array for "${apiStore}" but received:`, result);
+                        }
                     }
                 }
 

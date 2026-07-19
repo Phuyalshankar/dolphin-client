@@ -16,13 +16,14 @@ import { scanVFSBinds } from '../vfs';
 import { attachStoreBindings } from './store-bindings';
 import { attachRTBindings } from './rt-bindings';
 import { attachAPIBindings } from './api-bindings';
+import { attachModuleBindings } from './module-bindings';
 import { attachImports } from './imports';
 import { attachRouter } from './router';
-import { escapeRegExp } from './helpers';
+import { escapeRegExp, hydrateIcons } from './helpers';
 
 // Re-export utilities for consumers
-export { sanitizeHTML, evaluateExpression } from './helpers';
-export { renderTemplate, renderTemplate as compileTemplate } from './template';
+export { sanitizeHTML, evaluateExpression, hydrateIcons } from './helpers';
+export { renderTemplate, renderTemplate as compileTemplate, preprocessJSX } from './template';
 
 /**
  * Attach all DOM binding methods to DolphinClient.prototype.
@@ -43,6 +44,7 @@ export function attachDOMBinding(clientProto: any) {
     attachStoreBindings(clientProto);
     attachRTBindings(clientProto);
     attachAPIBindings(clientProto);
+    attachModuleBindings(clientProto);
     attachImports(clientProto, componentPromiseCache);
     attachRouter(clientProto);
 
@@ -262,9 +264,11 @@ export function attachDOMBinding(clientProto: any) {
 
         // 5–8. Bootstrap scans
         this._scanAndFetchAPIBinds();
+        this._scanAndLoadModuleBinds();
         this._scanStoreBinds();
         this._scanVFSBinds();
         this._resolveImports();
         this._initSPARouter();
+        hydrateIcons();
     };
 }

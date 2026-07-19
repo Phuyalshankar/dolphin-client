@@ -279,6 +279,16 @@ describe('DOM Binding', () => {
     expect(el.innerHTML).toBe('<li>Ram</li><li>Sita</li>');
   });
 
+  test('publish renders an array locally before sending it to the realtime server', () => {
+    const el = new MockElement('UL');
+    el.setAttribute('data-rt-template', '<li>{{name}}</li>');
+    ((global as any).document.querySelectorAll as jest.Mock).mockReturnValue([el]);
+
+    c.publish('api/users', [{ name: 'Ram' }, { name: 'Sita' }]);
+
+    expect(el.innerHTML).toBe('<li>Ram</li><li>Sita</li>');
+  });
+
   test('_updateDOM supports data-rt-type="context" for child element data passing', () => {
     const parent = new MockElement('DIV');
     parent.setAttribute('data-rt-type', 'context');
